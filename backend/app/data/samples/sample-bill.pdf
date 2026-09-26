@@ -1,0 +1,32 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 797 >>
+stream
+BT /F1 12 Tf 72 720 Td (MIZZOU HEALTH PARTNERS - PATIENT STATEMENT) Tj 0 -16 Td (Patient: Jordan Tiger          Member ID: ACM-2026-0412) Tj 0 -16 Td (Plan: ACME Corp Health Plan \(2026\) - PPO, in-network) Tj 0 -16 Td (Date of service: 08/14/2026    Reason: annual preventive wellness exam) Tj 0 -16 Td () Tj 0 -16 Td (Line  Code   Description                              Billed) Tj 0 -16 Td (1     99396  Preventive visit, established, age 40-64 $250.00) Tj 0 -16 Td (2     90686  Flu vaccine, preservative free           $40.00) Tj 0 -16 Td (3     90471  Vaccine administration                   $25.00) Tj 0 -16 Td (4     99396  Preventive visit, established, age 40-64 $250.00) Tj 0 -16 Td () Tj 0 -16 Td (Total charges: $565.00) Tj 0 -16 Td (Amount due from patient: $565.00) Tj 0 -16 Td ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000001089 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1159
+%%EOF
