@@ -13,7 +13,14 @@ from app.services.gemini import GeminiUnavailableError
 
 logger = logging.getLogger("clearclaim.eob")
 
-_ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp", "application/pdf"}
+_ALLOWED_IMAGE_TYPES = {
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+    "application/pdf",
+}
 _MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 _FULLY_COVERED_FLAG = "Your plan should cover this in full, so you shouldn't be charged."
 
@@ -66,7 +73,7 @@ async def scan_eob(
     if file.content_type not in _ALLOWED_IMAGE_TYPES:
         raise HTTPException(
             status_code=415,
-            detail="Upload a PNG, JPEG, WEBP image or PDF of your bill/EOB.",
+            detail="Upload a photo (PNG, JPEG, WEBP, HEIC) or PDF of your bill/EOB.",
         )
     data = await file.read()
     if not data:
