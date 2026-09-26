@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 PlanField = Literal["deductible_total", "coinsurance_rate", "oop_max"]
 
@@ -105,3 +105,14 @@ class EobScanResponse(BaseModel):
     )
     summary: str
     demo_mode: bool
+
+
+class SampleFile(BaseModel):
+    name: str
+    kind: Literal["bill", "benefits"]
+    description: str
+
+    @computed_field
+    @property
+    def url(self) -> str:
+        return f"/api/samples/{self.name}"
