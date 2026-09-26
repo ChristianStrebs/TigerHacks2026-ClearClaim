@@ -1,8 +1,8 @@
-# BeneSense — Healthcare Benefits Copilot
+# ClearClaim — Healthcare Benefits Copilot
 
 > TigerHacks 2026 · Medical / Health track · MLH "Best Use of Gemini API"
 
-BeneSense is an AI-powered **healthcare benefits copilot**. It turns dense,
+ClearClaim is an AI-powered **healthcare benefits copilot**. It turns dense,
 jargon-filled insurance policies into plain-English answers and flags likely
 overcharges on medical bills — focused strictly on the **administrative and
 financial** side of healthcare (no clinical/diagnostic advice).
@@ -10,7 +10,7 @@ financial** side of healthcare (no clinical/diagnostic advice).
 ## Core features
 
 1. **Contextual RAG chat** — Ask questions like _"How much will my knee surgery
-   cost?"_. BeneSense retrieves the relevant parts of your benefits PDF and uses
+   cost?"_. ClearClaim retrieves the relevant parts of your benefits PDF and uses
    your deductible status to compute an out-of-pocket estimate.
 2. **EOB / bill scanner** — Upload a photo of an Explanation of Benefits or a
    medical bill. Gemini vision extracts the line items, checks them against your
@@ -120,4 +120,4 @@ cd frontend && pnpm run build       # type-check + production build
 - The Supabase `service_role` key is server-only and never shipped to the browser.
 - The `documents` table has Row Level Security enabled; browser clients cannot
   read benefits content directly.
-- BeneSense provides administrative/financial guidance only — not medical advice.
+- ClearClaim provides administrative/financial guidance only — not medical advice.

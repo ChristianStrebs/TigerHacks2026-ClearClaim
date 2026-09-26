@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Idempotent dependency setup for the BeneSense monorepo.
+# Idempotent dependency setup for the ClearClaim monorepo.
 # Safe to run repeatedly and against cached state.
 set -euo pipefail
 

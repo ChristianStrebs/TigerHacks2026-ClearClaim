@@ -23,7 +23,7 @@ export default function App() {
         <div className="brand">
           <span className="logo">🩺</span>
           <div>
-            <h1>BeneSense</h1>
+            <h1>ClearClaim</h1>
             <p className="tagline">Your healthcare benefits copilot</p>
           </div>
         </div>
@@ -68,7 +68,7 @@ export default function App() {
       </main>
 
       <footer className="footer">
-        BeneSense focuses on administrative &amp; financial guidance — not clinical
+        ClearClaim focuses on administrative &amp; financial guidance — not clinical
         advice. {health && `Chat: ${health.chat_model} · Embeddings: ${health.embed_model}`}
       </footer>
     </div>

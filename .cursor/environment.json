@@ -1,5 +1,5 @@
 {
-  "name": "BeneSense (React + FastAPI + Gemini)",
+  "name": "ClearClaim (React + FastAPI + Gemini)",
   "install": "bash .cursor/install.sh",
   "terminals": [
     {

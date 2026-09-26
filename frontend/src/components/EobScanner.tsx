@@ -30,7 +30,7 @@ export function EobScanner() {
       <div className="eob-intro">
         <h2>Bill &amp; EOB scanner</h2>
         <p>
-          Upload a photo of a medical bill or Explanation of Benefits. BeneSense
+          Upload a photo of a medical bill or Explanation of Benefits. ClearClaim
           reads the line items, checks them against your plan, and flags likely
           overcharges or duplicate charges.
         </p>

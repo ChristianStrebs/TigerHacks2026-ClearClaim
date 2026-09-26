@@ -1,7 +1,7 @@
 [project]
-name = "benesense-backend"
+name = "clearclaim-backend"
 version = "0.1.0"
-description = "BeneSense — AI-powered healthcare benefits copilot (FastAPI backend)"
+description = "ClearClaim — AI-powered healthcare benefits copilot (FastAPI backend)"
 requires-python = ">=3.11"
 
 [tool.ruff]

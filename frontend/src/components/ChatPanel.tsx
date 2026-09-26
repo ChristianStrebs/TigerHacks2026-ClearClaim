@@ -72,7 +72,7 @@ export function ChatPanel({ onBenefits }: Props) {
             <div className="empty-state">
               <h2>Ask about your benefits</h2>
               <p>
-                BeneSense reads your plan documents and answers in plain English —
+                ClearClaim reads your plan documents and answers in plain English —
                 with the exact dollars based on your deductible.
               </p>
               <div className="suggestions">

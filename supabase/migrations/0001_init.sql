@@ -1,4 +1,4 @@
--- BeneSense — pgvector schema for benefits document retrieval.
+-- ClearClaim — pgvector schema for benefits document retrieval.
 -- Embedding dimension (768) must match backend EMBED_DIM / GEMINI_EMBED_MODEL.
 
 create extension if not exists vector;

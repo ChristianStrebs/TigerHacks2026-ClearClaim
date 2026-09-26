@@ -1,4 +1,4 @@
-"""BeneSense FastAPI application entry point."""
+"""ClearClaim FastAPI application entry point."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from app.services.ingestion import chunk_text
 from app.services.vector_store import Chunk, create_vector_store
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("benesense")
+logger = logging.getLogger("clearclaim")
 
 
 def _seed_sample_policy(services: AppServices) -> None:
@@ -56,7 +56,7 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
-        title="BeneSense API",
+        title="ClearClaim API",
         version="0.1.0",
         description="AI-powered healthcare benefits copilot.",
         lifespan=lifespan,

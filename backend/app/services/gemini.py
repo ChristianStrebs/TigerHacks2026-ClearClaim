@@ -15,7 +15,7 @@ import re
 
 from app.config import Settings
 
-logger = logging.getLogger("benesense.gemini")
+logger = logging.getLogger("clearclaim.gemini")
 
 _TOKEN = re.compile(r"[a-z0-9]+")
 
@@ -29,7 +29,7 @@ _EOB_INSTRUCTION = (
 )
 
 _CHAT_INSTRUCTION = (
-    "You are BeneSense, a friendly healthcare benefits copilot. Answer the "
+    "You are ClearClaim, a friendly healthcare benefits copilot. Answer the "
     "member's question using ONLY the provided policy excerpts and benefits "
     "snapshot. Be concrete about dollar amounts and deductible status. If the "
     "excerpts do not contain the answer, say so plainly. Never give clinical "
