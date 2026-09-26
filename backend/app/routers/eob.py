@@ -45,6 +45,14 @@ def _parse_line_items(raw_items: object) -> list[EobLineItem]:
     return items
 
 
+def potential_savings(items: list[EobLineItem]) -> float:
+    """Money at risk: for each flagged line, what was billed beyond what the plan expects."""
+    total = sum(
+        max(item.billed - (item.plan_expected or 0.0), 0.0) for item in items if item.flag
+    )
+    return round(total, 2)
+
+
 @router.post("/scan", response_model=EobScanResponse)
 async def scan_eob(
     file: UploadFile = File(...),
@@ -69,11 +77,13 @@ async def scan_eob(
 
     raw_flags = result.data.get("overcharge_flags")
     flags = [str(f) for f in raw_flags if f] if isinstance(raw_flags, list) else []
+    line_items = _parse_line_items(result.data.get("line_items"))
     return EobScanResponse(
         provider=result.data.get("provider") or None,
         total_billed=float(result.data.get("total_billed") or 0.0),
-        line_items=_parse_line_items(result.data.get("line_items")),
+        line_items=line_items,
         overcharge_flags=flags,
+        potential_savings=potential_savings(line_items),
         summary=str(result.data.get("summary") or ""),
         demo_mode=not result.live,
     )
