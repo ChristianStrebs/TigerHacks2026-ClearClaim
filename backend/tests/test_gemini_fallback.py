@@ -66,6 +66,19 @@ def test_backup_model_answers_when_primary_is_overloaded(live_but_broken: None) 
     assert models.calls == ["primary-model", "backup-model"]
 
 
+def test_plan_summary_list_becomes_one_bullet_per_line(live_but_broken: None) -> None:
+    service = GeminiService(Settings())
+    reply = '{"deductible": 3000, "summary": ["- Deductible: $3,000", "Copay: $35"]}'
+    service._client = SimpleNamespace(
+        models=SimpleNamespace(generate_content=lambda **_: SimpleNamespace(text=reply))
+    )
+
+    result = service.extract_plan(text="Deductible $3,000")
+
+    assert result.live is True
+    assert result.data["summary"] == "- Deductible: $3,000\n- Copay: $35"
+
+
 def test_offline_answer_defines_general_benefit_terms() -> None:
     service = GeminiService(Settings())
 
