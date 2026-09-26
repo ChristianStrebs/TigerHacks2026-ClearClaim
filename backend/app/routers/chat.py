@@ -9,9 +9,9 @@ from fastapi import APIRouter, Depends
 from app.dependencies import AppServices, get_services
 from app.schemas import ChatRequest, ChatResponse, Source
 from app.services.benefits import (
-    current_benefits,
     estimate_out_of_pocket,
     extract_dollar_amount,
+    snapshot,
 )
 from app.services.gemini import GeminiUnavailableError
 from app.services.vector_store import SearchHit
@@ -38,8 +38,15 @@ def chat(
     hits = _retrieve(services, payload.message)
 
     context = "\n\n".join(f"[{hit.document}] {hit.text}" for hit in hits)
-    benefits = current_benefits(services.settings)
+    plan = services.plan
+    benefits = snapshot(plan)
+    plan_note = (
+        "This is a sample demo plan; the member has not submitted their own benefits yet."
+        if plan.source == "demo"
+        else "The member submitted this plan themselves."
+    )
     benefits_text = (
+        f"Plan: {plan.name}. {plan_note} "
         f"Deductible: ${benefits.deductible_met:,.0f} of "
         f"${benefits.deductible_total:,.0f} met "
         f"(${benefits.deductible_remaining:,.0f} remaining). "
