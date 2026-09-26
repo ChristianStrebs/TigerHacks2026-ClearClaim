@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 import numpy as np
+from supabase import create_client
 
 from app.config import Settings
 
@@ -101,8 +102,6 @@ class SupabaseVectorStore:
     backend_name = "supabase-pgvector"
 
     def __init__(self, settings: Settings) -> None:
-        from supabase import create_client
-
         self._client = create_client(
             settings.supabase_url, settings.supabase_service_role_key
         )
