@@ -27,6 +27,7 @@ class Settings(BaseSettings):
         default="gemini-embedding-001", alias="GEMINI_EMBED_MODEL"
     )
     embed_dim: int = Field(default=768, alias="EMBED_DIM")
+    gemini_timeout_seconds: float = Field(default=30, alias="GEMINI_TIMEOUT_SECONDS")
 
     # Supabase (pgvector)
     supabase_url: str = Field(default="", alias="SUPABASE_URL")
