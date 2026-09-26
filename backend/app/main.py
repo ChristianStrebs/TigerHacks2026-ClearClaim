@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.dependencies import AppServices
 from app.routers import chat, documents, eob, health
-from app.services.gemini import GeminiService
+from app.services.gemini import GeminiService, GeminiUnavailableError
 from app.services.ingestion import chunk_text
 from app.services.vector_store import Chunk, create_vector_store
 
@@ -28,7 +28,13 @@ def _seed_sample_policy(services: AppServices) -> None:
         logger.warning("Sample policy not found; skipping seed.")
         return
     chunks = chunk_text(text)
-    embeddings = services.gemini.embed_texts(chunks)
+    try:
+        embeddings = services.gemini.embed_texts(chunks)
+    except GeminiUnavailableError as exc:
+        # The index must use one embedding space, so a startup failure switches the
+        # whole app to demo mode rather than mixing live and offline vectors.
+        services.gemini.disable(str(exc))
+        embeddings = services.gemini.embed_texts(chunks)
     records = [
         Chunk(document="ACME Corp Health Plan (2026)", text=c, embedding=e)
         for c, e in zip(chunks, embeddings, strict=True)
