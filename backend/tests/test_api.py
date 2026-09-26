@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
+from app.routers.eob import _parse_line_items, potential_savings
 from app.schemas import BenefitsSnapshot
 from app.services.benefits import estimate_out_of_pocket, extract_dollar_amount
 from app.services.ingestion import chunk_text
@@ -59,7 +60,22 @@ def test_eob_scan_flags_overcharges(client: TestClient) -> None:
     assert len(body["line_items"]) > 0
     assert len(body["overcharge_flags"]) > 0
     # Sample bill: $45 preventive draw + $210 duplicate office visit.
-    assert body["potential_savings"] == 255
+    assert body["potential_savings"] == 565
+
+
+def test_fully_covered_lines_are_flagged_as_money_at_risk() -> None:
+    items = _parse_line_items(
+        [
+            {"code": "99395", "description": "Wellness", "billed": 200, "plan_expected": 0,
+             "covered": True, "flag": ""},
+            {"code": "80053", "description": "Labs", "billed": 100, "plan_expected": 20,
+             "covered": True, "flag": ""},
+        ]
+    )
+
+    assert items[0].flag
+    assert not items[1].flag
+    assert potential_savings(items) == 200
 
 
 def test_eob_scan_rejects_non_image(client: TestClient) -> None:
