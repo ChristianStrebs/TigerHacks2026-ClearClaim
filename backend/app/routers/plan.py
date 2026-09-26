@@ -1,0 +1,87 @@
+"""The member's active plan: read it, replace it from a PDF/photo, or reset to the sample."""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+
+from app.dependencies import AppServices, get_services
+from app.schemas import PlanResponse
+from app.services.benefits import (
+    SAMPLE_PLAN_NAME,
+    plan_from_extraction,
+    plan_response,
+    sample_plan,
+)
+from app.services.gemini import GeminiUnavailableError
+from app.services.indexing import load_sample_policy, replace_index
+from app.services.ingestion import extract_pdf_text
+
+router = APIRouter(prefix="/api/plan", tags=["plan"])
+
+_PDF = "application/pdf"
+_IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"}
+_MAX_UPLOAD_BYTES = 15 * 1024 * 1024
+_AI_UNREACHABLE = "The AI service is unreachable right now. Please try again in a moment."
+
+
+@router.get("", response_model=PlanResponse)
+def get_plan(services: AppServices = Depends(get_services)) -> PlanResponse:
+    return plan_response(services.plan)
+
+
+@router.post("/upload", response_model=PlanResponse)
+async def upload_plan(
+    file: UploadFile = File(...),
+    services: AppServices = Depends(get_services),
+) -> PlanResponse:
+    mime_type = file.content_type or ""
+    if mime_type != _PDF and mime_type not in _IMAGE_TYPES:
+        raise HTTPException(
+            status_code=415,
+            detail="Upload your benefits as a PDF or a photo (PNG, JPEG, WEBP, HEIC).",
+        )
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Uploaded file was empty.")
+    if len(data) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File is too large (15 MB max).")
+
+    text = ""
+    if mime_type == _PDF:
+        try:
+            text = extract_pdf_text(data)
+        except Exception as exc:  # noqa: BLE001 - surface a clean 400 to the client
+            raise HTTPException(status_code=400, detail=f"Could not read PDF: {exc}") from exc
+
+    # Text PDFs are sent as text; photos and scanned PDFs go to Gemini vision.
+    extraction = services.gemini.extract_plan(text=text, file_bytes=data, mime_type=mime_type)
+    document_text = text or str(extraction.data.get("full_text") or "")
+    if not document_text.strip():
+        raise HTTPException(
+            status_code=422,
+            detail=str(extraction.data.get("summary") or "Couldn't find any text to read."),
+        )
+
+    plan = plan_from_extraction(
+        services.settings,
+        fallback_name=file.filename or "Your plan",
+        extracted=extraction.data,
+        summary_live=extraction.live,
+    )
+    try:
+        replace_index(services, plan.name, document_text)
+    except GeminiUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=_AI_UNREACHABLE) from exc
+    services.plan = plan
+    return plan_response(plan)
+
+
+@router.post("/reset", response_model=PlanResponse)
+def reset_plan(services: AppServices = Depends(get_services)) -> PlanResponse:
+    """Go back to the bundled sample plan, e.g. between demo visitors."""
+    try:
+        replace_index(services, SAMPLE_PLAN_NAME, load_sample_policy())
+    except GeminiUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=_AI_UNREACHABLE) from exc
+    services.plan = sample_plan(services.settings)
+    return plan_response(services.plan)
