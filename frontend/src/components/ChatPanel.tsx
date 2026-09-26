@@ -35,10 +35,13 @@ export function ChatPanel({ onBenefits }: Props) {
     if (!trimmed || loading) return;
     setError(null);
     setInput("");
+    // Capture the procedure cost for this question, then clear it so an
+    // unrelated follow-up question doesn't reuse a stale estimate.
+    const billedAmount = billed ? Number(billed) : undefined;
+    setBilled("");
     setTurns((prev) => [...prev, { role: "user", text: trimmed }]);
     setLoading(true);
     try {
-      const billedAmount = billed ? Number(billed) : undefined;
       const res: ChatResponse = await sendChat(trimmed, billedAmount);
       setBenefits(res.benefits);
       onBenefits(res.benefits);
