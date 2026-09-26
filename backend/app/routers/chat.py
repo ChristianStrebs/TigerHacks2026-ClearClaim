@@ -8,7 +8,11 @@ from fastapi import APIRouter, Depends
 
 from app.dependencies import AppServices, get_services
 from app.schemas import ChatRequest, ChatResponse, Source
-from app.services.benefits import current_benefits, estimate_out_of_pocket
+from app.services.benefits import (
+    current_benefits,
+    estimate_out_of_pocket,
+    extract_dollar_amount,
+)
 from app.services.gemini import GeminiUnavailableError
 from app.services.vector_store import SearchHit
 
@@ -43,11 +47,19 @@ def chat(
         f"Out-of-pocket max: ${benefits.oop_max:,.0f}."
     )
 
-    answer = services.gemini.generate_answer(payload.message, context, benefits_text)
+    billed_amount = payload.billed_amount
+    if billed_amount is None:
+        billed_amount = extract_dollar_amount(payload.message)
+    cost_estimate = (
+        estimate_out_of_pocket(billed_amount, benefits) if billed_amount is not None else None
+    )
 
-    cost_estimate = None
-    if payload.billed_amount is not None:
-        cost_estimate = estimate_out_of_pocket(payload.billed_amount, benefits)
+    answer = services.gemini.generate_answer(
+        payload.message,
+        context,
+        benefits_text,
+        cost_note=cost_estimate.explanation if cost_estimate else None,
+    )
 
     sources = [
         Source(document=hit.document, snippet=hit.text[:280], score=round(hit.score, 4))
