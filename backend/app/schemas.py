@@ -1,6 +1,10 @@
 """Pydantic request/response models shared across routers."""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+PlanField = Literal["deductible_total", "coinsurance_rate", "oop_max"]
 
 
 class HealthResponse(BaseModel):
@@ -37,6 +41,18 @@ class BenefitsSnapshot(BaseModel):
     deductible_remaining: float
     coinsurance_rate: float
     oop_max: float
+    demo_fields: list[PlanField] = Field(
+        default_factory=list,
+        description="Numbers still using demo values because they weren't found in a plan.",
+    )
+
+
+class PlanResponse(BaseModel):
+    plan_name: str
+    source: Literal["demo", "document"]
+    benefits: BenefitsSnapshot
+    summary: str
+    demo_mode: bool = Field(description="True when the summary did not come from live Gemini.")
 
 
 class CostEstimate(BaseModel):
