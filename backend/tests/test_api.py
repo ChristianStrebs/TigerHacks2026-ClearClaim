@@ -58,6 +58,8 @@ def test_eob_scan_flags_overcharges(client: TestClient) -> None:
     assert body["total_billed"] > 0
     assert len(body["line_items"]) > 0
     assert len(body["overcharge_flags"]) > 0
+    # Sample bill: $45 preventive draw + $210 duplicate office visit.
+    assert body["potential_savings"] == 255
 
 
 def test_eob_scan_rejects_non_image(client: TestClient) -> None:
