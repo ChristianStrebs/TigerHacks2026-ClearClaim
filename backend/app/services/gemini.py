@@ -33,7 +33,7 @@ Extract the member's in-network, individual numbers:
 - coinsurance_percent: the member's share after the deductible, as a percent (20 means 20%)
 - oop_max: the annual out-of-pocket maximum in dollars
 Use 0 for any number the document does not state. Never guess.
-Write `summary` as 4-6 markdown "- " bullets in plain language (8th-grade reading level):
+Write `summary` as 4-6 short bullet strings in plain language (8th-grade reading level):
 deductible, coinsurance, out-of-pocket max, free preventive care, common copays, and the
 biggest watch-outs such as prior authorization. Financial and administrative only; no
 medical advice.
@@ -47,16 +47,18 @@ _UNREADABLE_PHOTO_SUMMARY = (
 
 _TOKEN = re.compile(r"[a-z0-9]+")
 
-_EOB_INSTRUCTION = (
-    "You are a medical billing expert. Extract every line item from this "
-    "Explanation of Benefits or medical bill. For each line item return the "
-    "billing/CPT code, a short description, the billed amount, the amount the "
-    "member should owe under their plan (plan_expected), whether the plan should "
-    "cover it, and a flag string when the charge looks like a duplicate, an "
-    "upcode, or something the plan should have covered. Use an empty string for "
-    "flag when the line looks fine. Use the provided plan summary to decide "
-    "coverage. Write the summary in plain language. Respond ONLY with JSON."
-)
+_EOB_INSTRUCTION = """You are a medical billing expert. Extract every line item from this
+Explanation of Benefits or medical bill. For each line return the billing/CPT code, a short
+description, the billed amount, whether the plan should cover it, and plan_expected: what the
+member should personally pay for that line under the plan summary provided.
+- plan_expected is 0 for a duplicate of an earlier line and for services the plan covers at
+  100% (for example in-network preventive care when the visit reason is preventive).
+- Set flag to one short plain-language reason on EVERY line where the member is charged more
+  than plan_expected because of a duplicate, an upcode, or coverage the plan owes. Use an
+  empty string only when the charge is correct.
+- overcharge_flags lists one plain-language sentence per flagged line.
+- Stay consistent: if the summary says a charge should be covered, that line must be flagged.
+Write the summary in plain language (8th-grade reading level). Respond ONLY with JSON."""
 
 _CHAT_INSTRUCTION = """You are ClearClaim, a friendly healthcare benefits copilot for employees.
 - When policy excerpts are relevant, answer from them and be concrete about dollar
@@ -283,7 +285,11 @@ class GeminiService:
         )
         if raw is not None:
             try:
-                return PlanResult(json.loads(raw), live=True)
+                data = json.loads(raw)
+                points = data.get("summary") or []
+                if isinstance(points, list):
+                    data["summary"] = "\n".join(f"- {str(p).lstrip('-• ').strip()}" for p in points)
+                return PlanResult(data, live=True)
             except json.JSONDecodeError:
                 logger.exception("Gemini returned invalid plan JSON; using offline reader")
         if text.strip():
@@ -301,7 +307,7 @@ class GeminiService:
             ],
             types.GenerateContentConfig(
                 system_instruction=_EOB_INSTRUCTION,
-                temperature=0.1,
+                temperature=0,
                 response_mime_type="application/json",
                 response_schema=_EOB_SCHEMA,
             ),
@@ -317,48 +323,49 @@ class GeminiService:
     def _fallback_eob(self) -> dict:
         return {
             "provider": "Mizzou Health Partners (sample)",
-            "total_billed": 1240.00,
+            "total_billed": 565.00,
             "line_items": [
                 {
-                    "code": "99213",
-                    "description": "Office visit, established patient",
-                    "billed": 210.00,
-                    "plan_expected": 165.00,
-                    "covered": True,
-                    "flag": None,
-                },
-                {
-                    "code": "80053",
-                    "description": "Comprehensive metabolic panel",
-                    "billed": 130.00,
-                    "plan_expected": 130.00,
-                    "covered": True,
-                    "flag": None,
-                },
-                {
-                    "code": "36415",
-                    "description": "Routine venipuncture (blood draw)",
-                    "billed": 45.00,
+                    "code": "99396",
+                    "description": "Preventive visit, established, age 40-64",
+                    "billed": 250.00,
                     "plan_expected": 0.00,
                     "covered": True,
-                    "flag": "Preventive draw — should be $0 under your plan.",
+                    "flag": "Annual wellness visit — preventive care is $0 under your plan.",
                 },
                 {
-                    "code": "99213",
-                    "description": "Office visit (duplicate charge)",
-                    "billed": 210.00,
+                    "code": "90686",
+                    "description": "Flu vaccine, preservative free",
+                    "billed": 40.00,
+                    "plan_expected": 0.00,
+                    "covered": True,
+                    "flag": "Routine vaccine — covered at 100% under your plan.",
+                },
+                {
+                    "code": "90471",
+                    "description": "Vaccine administration",
+                    "billed": 25.00,
+                    "plan_expected": 0.00,
+                    "covered": True,
+                    "flag": "Giving the vaccine is part of preventive care — should be $0.",
+                },
+                {
+                    "code": "99396",
+                    "description": "Preventive visit (duplicate charge)",
+                    "billed": 250.00,
                     "plan_expected": 0.00,
                     "covered": False,
-                    "flag": "Possible duplicate of the first office visit.",
+                    "flag": "Exact duplicate of line 1 on the same date.",
                 },
             ],
             "overcharge_flags": [
-                "Line 3: routine blood draw billed at $45 but preventive under your plan.",
-                "Line 4: office visit 99213 appears twice — likely a duplicate charge.",
+                "Lines 1-3: a wellness visit and flu shot are preventive care, which your "
+                "plan covers at 100%.",
+                "Line 4: the wellness visit (99396) is billed twice on the same date.",
             ],
             "summary": (
-                "Sample analysis: this bill has two likely mistakes worth about $255 — "
-                "a preventive blood draw that should be free and a duplicate office visit."
+                "Sample analysis: you were billed $565 for a wellness visit and flu shot "
+                "that your plan covers in full, including a duplicate visit charge."
             ),
         }
 
@@ -397,7 +404,7 @@ _PLAN_SCHEMA = {
         "deductible": {"type": "number"},
         "coinsurance_percent": {"type": "number"},
         "oop_max": {"type": "number"},
-        "summary": {"type": "string"},
+        "summary": {"type": "array", "items": {"type": "string"}},
         "full_text": {"type": "string"},
     },
     "required": ["deductible", "coinsurance_percent", "oop_max", "summary", "full_text"],
