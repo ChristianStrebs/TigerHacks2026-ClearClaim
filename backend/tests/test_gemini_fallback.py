@@ -1,6 +1,8 @@
-"""Live-mode failures must degrade to demo answers instead of breaking the demo."""
+"""Live-mode failures must degrade gracefully instead of breaking the demo."""
 
 from __future__ import annotations
+
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -24,6 +26,17 @@ class _FailingClient:
         self.models = _FailingModels()
 
 
+class _OverloadedPrimaryModels:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def generate_content(self, *, model: str, **_: object) -> SimpleNamespace:
+        self.calls.append(model)
+        if model == "primary-model":
+            raise ConnectionError("503 high demand")
+        return SimpleNamespace(text="Answer from backup")
+
+
 @pytest.fixture
 def live_but_broken(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
@@ -31,14 +44,35 @@ def live_but_broken(monkeypatch: pytest.MonkeyPatch) -> None:
     get_settings.cache_clear()
 
 
-def test_chat_answer_falls_back_when_generation_fails(live_but_broken: None) -> None:
+def test_chat_answer_falls_back_when_all_models_fail(live_but_broken: None) -> None:
     service = GeminiService(Settings())
     assert service.enabled
 
     result = service.generate_answer("Deductible?", "Deductible is $2,000.", "")
 
     assert result.live is False
-    assert "Demo mode" in result.text
+    assert "+ button" in result.text
+
+
+def test_backup_model_answers_when_primary_is_overloaded(live_but_broken: None) -> None:
+    settings = Settings(GEMINI_CHAT_MODEL="primary-model", GEMINI_FALLBACK_MODELS="backup-model")
+    service = GeminiService(settings)
+    models = _OverloadedPrimaryModels()
+    service._client = SimpleNamespace(models=models)
+
+    result = service.generate_answer("Deductible?", "", "")
+
+    assert result == ("Answer from backup", True)
+    assert models.calls == ["primary-model", "backup-model"]
+
+
+def test_offline_answer_defines_general_benefit_terms() -> None:
+    service = GeminiService(Settings())
+
+    result = service.generate_answer("What is coinsurance?", "", "")
+
+    assert result.live is False
+    assert "Coinsurance" in result.text
 
 
 def test_eob_scan_falls_back_when_vision_fails(live_but_broken: None) -> None:
