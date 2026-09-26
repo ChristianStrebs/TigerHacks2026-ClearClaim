@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     )
     embed_dim: int = Field(default=768, alias="EMBED_DIM")
     gemini_timeout_seconds: float = Field(default=30, alias="GEMINI_TIMEOUT_SECONDS")
+    gemini_fallback_models: str = Field(
+        default="gemini-3.7-flash,gemini-3.5-flash-lite",
+        alias="GEMINI_FALLBACK_MODELS",
+    )
 
     # Supabase (pgvector)
     supabase_url: str = Field(default="", alias="SUPABASE_URL")
@@ -56,6 +60,12 @@ class Settings(BaseSettings):
     def supabase_enabled(self) -> bool:
         """True when Supabase credentials are configured."""
         return bool(self.supabase_url.strip() and self.supabase_service_role_key.strip())
+
+    @property
+    def gemini_generation_models(self) -> list[str]:
+        """Primary chat model followed by backups tried when it is overloaded."""
+        backups = [m.strip() for m in self.gemini_fallback_models.split(",") if m.strip()]
+        return [self.gemini_chat_model, *[m for m in backups if m != self.gemini_chat_model]]
 
     @property
     def cors_origin_list(self) -> list[str]:
