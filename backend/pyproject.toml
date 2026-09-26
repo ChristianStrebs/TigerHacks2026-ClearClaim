@@ -1,0 +1,20 @@
+[project]
+name = "benesense-backend"
+version = "0.1.0"
+description = "BeneSense — AI-powered healthcare benefits copilot (FastAPI backend)"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+# B008 is the idiomatic FastAPI dependency-injection pattern (Depends()/File()
+# in argument defaults), so it is intentionally allowed here.
+ignore = ["B008"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_mode = "auto"
+testpaths = ["tests"]
