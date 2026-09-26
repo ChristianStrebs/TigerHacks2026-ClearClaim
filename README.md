@@ -107,6 +107,14 @@ bash .cursor/install.sh       # installs backend + frontend dependencies
 | POST   | `/api/documents`        | Ingest raw policy text                   |
 | POST   | `/api/documents/upload` | Ingest a policy PDF                       |
 | POST   | `/api/eob/scan`         | Analyze an uploaded bill/EOB image or PDF |
+| GET    | `/api/plan`             | Active plan: numbers, summary, demo flags |
+| POST   | `/api/plan/upload`      | Replace the plan from a benefits PDF/photo |
+| POST   | `/api/plan/reset`       | Go back to the sample plan               |
+| GET    | `/api/samples`          | List demo PDFs (bill, benefits)          |
+| GET    | `/api/samples/{name}`   | Download a demo PDF                      |
+
+Request/response shapes, mobile integration notes, and what changed recently are in
+[CHANGELOG.md](CHANGELOG.md).
 
 ## Testing
 
