@@ -20,8 +20,30 @@ from google import genai
 from google.genai import types
 
 from app.config import Settings
+from app.services.benefits import extract_plan_numbers_offline
 
 logger = logging.getLogger("clearclaim.gemini")
+
+_MAX_PLAN_CHARS = 40_000
+
+_PLAN_INSTRUCTION = """You read health insurance benefit documents: Summaries of Benefits and
+Coverage, plan booklets, and photos of benefits pages or cards.
+Extract the member's in-network, individual numbers:
+- deductible: the annual deductible in dollars
+- coinsurance_percent: the member's share after the deductible, as a percent (20 means 20%)
+- oop_max: the annual out-of-pocket maximum in dollars
+Use 0 for any number the document does not state. Never guess.
+Write `summary` as 4-6 markdown "- " bullets in plain language (8th-grade reading level):
+deductible, coinsurance, out-of-pocket max, free preventive care, common copays, and the
+biggest watch-outs such as prior authorization. Financial and administrative only; no
+medical advice.
+If the input is an image or a scanned document, put a faithful plain-text transcription of
+every benefit detail in `full_text`; otherwise use an empty string."""
+
+_UNREADABLE_PHOTO_SUMMARY = (
+    "I couldn't read this photo right now because the AI service is unavailable. "
+    "Try again in a moment, or upload a PDF of your benefits."
+)
 
 _TOKEN = re.compile(r"[a-z0-9]+")
 
@@ -88,6 +110,11 @@ class TextResult(NamedTuple):
 
 
 class EobResult(NamedTuple):
+    data: dict
+    live: bool
+
+
+class PlanResult(NamedTuple):
     data: dict
     live: bool
 
@@ -227,6 +254,43 @@ class GeminiService:
         )
 
     # ------------------------------------------------------------------ #
+    # Plan reading (benefits PDF text or photo)
+    # ------------------------------------------------------------------ #
+    def extract_plan(
+        self,
+        *,
+        text: str = "",
+        file_bytes: bytes = b"",
+        mime_type: str = "",
+    ) -> PlanResult:
+        """Read plan numbers and a plain-language summary from text or an image/PDF."""
+        contents: types.ContentListUnion
+        if text.strip():
+            contents = f"Benefits document text:\n{text[:_MAX_PLAN_CHARS]}"
+        else:
+            contents = [
+                types.Part.from_bytes(data=file_bytes, mime_type=mime_type),
+                "Read this benefits document.",
+            ]
+        raw = self._generate(
+            contents,
+            types.GenerateContentConfig(
+                system_instruction=_PLAN_INSTRUCTION,
+                temperature=0.1,
+                response_mime_type="application/json",
+                response_schema=_PLAN_SCHEMA,
+            ),
+        )
+        if raw is not None:
+            try:
+                return PlanResult(json.loads(raw), live=True)
+            except json.JSONDecodeError:
+                logger.exception("Gemini returned invalid plan JSON; using offline reader")
+        if text.strip():
+            return PlanResult(extract_plan_numbers_offline(text), live=False)
+        return PlanResult({"summary": _UNREADABLE_PHOTO_SUMMARY}, live=False)
+
+    # ------------------------------------------------------------------ #
     # Vision (EOB / bill scanner)
     # ------------------------------------------------------------------ #
     def analyze_eob(self, image_bytes: bytes, mime_type: str, policy_context: str) -> EobResult:
@@ -324,4 +388,17 @@ _EOB_SCHEMA = {
         "summary": {"type": "string"},
     },
     "required": ["total_billed", "line_items", "overcharge_flags", "summary"],
+}
+
+_PLAN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "plan_name": {"type": "string"},
+        "deductible": {"type": "number"},
+        "coinsurance_percent": {"type": "number"},
+        "oop_max": {"type": "number"},
+        "summary": {"type": "string"},
+        "full_text": {"type": "string"},
+    },
+    "required": ["deductible", "coinsurance_percent", "oop_max", "summary", "full_text"],
 }
