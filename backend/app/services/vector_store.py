@@ -47,6 +47,8 @@ class VectorStore(Protocol):
 
     def count(self) -> int: ...
 
+    def clear(self) -> None: ...
+
 
 def _cosine(matrix: np.ndarray, query: np.ndarray) -> np.ndarray:
     """Row-wise cosine similarity between ``matrix`` rows and ``query``."""
@@ -90,6 +92,10 @@ class InMemoryVectorStore:
 
     def count(self) -> int:
         return len(self._chunks)
+
+    def clear(self) -> None:
+        self._chunks = []
+        self._matrix = None
 
 
 class SupabaseVectorStore:
@@ -140,6 +146,10 @@ class SupabaseVectorStore:
     def count(self) -> int:
         response = self._client.table("documents").select("id", count="exact").execute()
         return response.count or 0
+
+    def clear(self) -> None:
+        # PostgREST refuses unfiltered deletes, so match every row explicitly.
+        self._client.table("documents").delete().not_.is_("id", "null").execute()
 
 
 def create_vector_store(settings: Settings) -> VectorStore:
