@@ -2,8 +2,9 @@
 
 When no API key is configured the service transparently falls back to
 deterministic, offline behavior so the whole product is demoable without
-network access or secrets. Every fallback path is clearly marked so it is
-obvious in the UI that the app is running in demo mode.
+network access or secrets. Live calls that fail (bad key, unknown model,
+network drop) also fall back instead of surfacing a 500, and every result
+reports whether it actually came from Gemini so the UI can stay honest.
 """
 
 from __future__ import annotations
@@ -12,6 +13,10 @@ import hashlib
 import json
 import logging
 import re
+from typing import NamedTuple
+
+from google import genai
+from google.genai import types
 
 from app.config import Settings
 
@@ -38,14 +43,31 @@ _CHAT_INSTRUCTION = (
 )
 
 
+class GeminiUnavailableError(RuntimeError):
+    """Raised when a live embedding call fails and no safe fallback exists."""
+
+
+class TextResult(NamedTuple):
+    text: str
+    live: bool
+
+
+class EobResult(NamedTuple):
+    data: dict
+    live: bool
+
+
 class GeminiService:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        self._client = None
+        self._client: genai.Client | None = None
         if settings.gemini_enabled:
-            from google import genai
-
-            self._client = genai.Client(api_key=settings.gemini_api_key)
+            self._client = genai.Client(
+                api_key=settings.gemini_api_key,
+                http_options=types.HttpOptions(
+                    timeout=int(settings.gemini_timeout_seconds * 1000)
+                ),
+            )
             logger.info("Gemini enabled with model %s", settings.gemini_chat_model)
         else:
             logger.warning(
@@ -57,6 +79,11 @@ class GeminiService:
     def enabled(self) -> bool:
         return self._client is not None
 
+    def disable(self, reason: str) -> None:
+        """Permanently switch to demo mode (used when startup indexing fails)."""
+        logger.error("Disabling Gemini, falling back to demo mode: %s", reason)
+        self._client = None
+
     # ------------------------------------------------------------------ #
     # Embeddings
     # ------------------------------------------------------------------ #
@@ -65,33 +92,33 @@ class GeminiService:
             return []
         if self._client is None:
             return [self._fallback_embedding(t) for t in texts]
-
-        from google.genai import types
-
-        response = self._client.models.embed_content(
-            model=self._settings.gemini_embed_model,
-            contents=texts,
-            config=types.EmbedContentConfig(
-                output_dimensionality=self._settings.embed_dim,
-                task_type="RETRIEVAL_DOCUMENT",
-            ),
-        )
+        try:
+            response = self._client.models.embed_content(
+                model=self._settings.gemini_embed_model,
+                contents=texts,
+                config=types.EmbedContentConfig(
+                    output_dimensionality=self._settings.embed_dim,
+                    task_type="RETRIEVAL_DOCUMENT",
+                ),
+            )
+        except Exception as exc:
+            raise GeminiUnavailableError(f"Embedding documents failed: {exc}") from exc
         return [list(e.values) for e in response.embeddings]
 
     def embed_query(self, text: str) -> list[float]:
         if self._client is None:
             return self._fallback_embedding(text)
-
-        from google.genai import types
-
-        response = self._client.models.embed_content(
-            model=self._settings.gemini_embed_model,
-            contents=text,
-            config=types.EmbedContentConfig(
-                output_dimensionality=self._settings.embed_dim,
-                task_type="RETRIEVAL_QUERY",
-            ),
-        )
+        try:
+            response = self._client.models.embed_content(
+                model=self._settings.gemini_embed_model,
+                contents=text,
+                config=types.EmbedContentConfig(
+                    output_dimensionality=self._settings.embed_dim,
+                    task_type="RETRIEVAL_QUERY",
+                ),
+            )
+        except Exception as exc:
+            raise GeminiUnavailableError(f"Embedding query failed: {exc}") from exc
         return list(response.embeddings[0].values)
 
     def _fallback_embedding(self, text: str) -> list[float]:
@@ -113,26 +140,31 @@ class GeminiService:
     # ------------------------------------------------------------------ #
     # Chat (RAG)
     # ------------------------------------------------------------------ #
-    def generate_answer(self, question: str, context: str, benefits: str) -> str:
+    def generate_answer(self, question: str, context: str, benefits: str) -> TextResult:
         if self._client is None:
-            return self._fallback_answer(question, context)
-
-        from google.genai import types
+            return TextResult(self._fallback_answer(question, context), live=False)
 
         prompt = (
             f"Benefits snapshot:\n{benefits}\n\n"
             f"Policy excerpts:\n{context}\n\n"
             f"Member question: {question}"
         )
-        response = self._client.models.generate_content(
-            model=self._settings.gemini_chat_model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=_CHAT_INSTRUCTION,
-                temperature=0.2,
-            ),
-        )
-        return (response.text or "").strip()
+        try:
+            response = self._client.models.generate_content(
+                model=self._settings.gemini_chat_model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=_CHAT_INSTRUCTION,
+                    temperature=0.2,
+                ),
+            )
+        except Exception:
+            logger.exception("Gemini chat call failed; using offline answer")
+            return TextResult(self._fallback_answer(question, context), live=False)
+        text = (response.text or "").strip()
+        if not text:
+            return TextResult(self._fallback_answer(question, context), live=False)
+        return TextResult(text, live=True)
 
     def _fallback_answer(self, question: str, context: str) -> str:
         if not context.strip():
@@ -151,32 +183,28 @@ class GeminiService:
     # ------------------------------------------------------------------ #
     # Vision (EOB / bill scanner)
     # ------------------------------------------------------------------ #
-    def analyze_eob(
-        self, image_bytes: bytes, mime_type: str, policy_context: str
-    ) -> dict:
+    def analyze_eob(self, image_bytes: bytes, mime_type: str, policy_context: str) -> EobResult:
         if self._client is None:
-            return self._fallback_eob()
+            return EobResult(self._fallback_eob(), live=False)
 
-        from google.genai import types
-
-        response = self._client.models.generate_content(
-            model=self._settings.gemini_chat_model,
-            contents=[
-                types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-                f"Plan summary to check coverage against:\n{policy_context}",
-            ],
-            config=types.GenerateContentConfig(
-                system_instruction=_EOB_INSTRUCTION,
-                temperature=0.1,
-                response_mime_type="application/json",
-                response_schema=_EOB_SCHEMA,
-            ),
-        )
         try:
-            return json.loads(response.text or "{}")
-        except json.JSONDecodeError:
-            logger.exception("Failed to parse EOB JSON from Gemini")
-            return self._fallback_eob()
+            response = self._client.models.generate_content(
+                model=self._settings.gemini_chat_model,
+                contents=[
+                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                    f"Plan summary to check coverage against:\n{policy_context}",
+                ],
+                config=types.GenerateContentConfig(
+                    system_instruction=_EOB_INSTRUCTION,
+                    temperature=0.1,
+                    response_mime_type="application/json",
+                    response_schema=_EOB_SCHEMA,
+                ),
+            )
+            return EobResult(json.loads(response.text or "{}"), live=True)
+        except Exception:
+            logger.exception("Gemini EOB scan failed; using sample analysis")
+            return EobResult(self._fallback_eob(), live=False)
 
     def _fallback_eob(self) -> dict:
         return {
