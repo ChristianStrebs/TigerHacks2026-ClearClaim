@@ -7,28 +7,22 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from app.dependencies import AppServices, get_services
 from app.schemas import DocumentIngestRequest, DocumentIngestResponse
 from app.services.gemini import GeminiUnavailableError
-from app.services.ingestion import chunk_text, extract_pdf_text
-from app.services.vector_store import Chunk
+from app.services.indexing import index_document
+from app.services.ingestion import extract_pdf_text
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 
 def _ingest(services: AppServices, title: str, text: str) -> DocumentIngestResponse:
-    chunks = chunk_text(text)
-    if not chunks:
-        raise HTTPException(status_code=400, detail="Document contained no text.")
     try:
-        embeddings = services.gemini.embed_texts(chunks)
+        added = index_document(services, title, text)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except GeminiUnavailableError as exc:
         raise HTTPException(
             status_code=503,
             detail="The AI service is unreachable right now. Please try again in a moment.",
         ) from exc
-    records = [
-        Chunk(document=title, text=chunk, embedding=embedding)
-        for chunk, embedding in zip(chunks, embeddings, strict=True)
-    ]
-    added = services.vector_store.add(records)
     return DocumentIngestResponse(
         title=title,
         chunks_indexed=added,
