@@ -2,8 +2,23 @@
 
 from __future__ import annotations
 
+import re
+
 from app.config import Settings
 from app.schemas import BenefitsSnapshot, CostEstimate
+
+_DOLLAR_AMOUNT = re.compile(r"\$\s?(\d[\d,]*(?:\.\d{1,2})?)\s*(k\b)?", re.IGNORECASE)
+
+
+def extract_dollar_amount(text: str) -> float | None:
+    """Return the first dollar figure in ``text`` (e.g. "$18,000" or "$18k"), if any."""
+    match = _DOLLAR_AMOUNT.search(text)
+    if match is None:
+        return None
+    amount = float(match.group(1).replace(",", ""))
+    if match.group(2):
+        amount *= 1000
+    return amount
 
 
 def current_benefits(settings: Settings) -> BenefitsSnapshot:
