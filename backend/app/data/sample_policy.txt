@@ -1,0 +1,54 @@
+ACME CORP EMPLOYEE HEALTH PLAN — SUMMARY OF BENEFITS (PLAN YEAR 2026)
+
+PLAN TYPE
+This is a Preferred Provider Organization (PPO) plan. You may see any provider,
+but you pay less when you use in-network providers.
+
+DEDUCTIBLE
+Individual in-network deductible: $2,000 per plan year.
+Family in-network deductible: $4,000 per plan year.
+The deductible is the amount you pay for covered services before the plan begins
+to pay. Preventive care is not subject to the deductible.
+
+COINSURANCE
+After you meet your deductible, you pay 20% coinsurance for most in-network
+covered services and the plan pays 80%. Out-of-network coinsurance is 40%.
+
+OUT-OF-POCKET MAXIMUM
+Individual in-network out-of-pocket maximum: $6,000 per plan year.
+Once you reach the out-of-pocket maximum, the plan pays 100% of covered
+in-network services for the rest of the plan year.
+
+PREVENTIVE CARE
+In-network preventive care is covered at 100% with no deductible and no copay.
+This includes annual wellness visits, routine immunizations, routine screenings,
+and preventive lab work such as routine venipuncture (blood draw, code 36415)
+performed as part of a covered screening.
+
+OFFICE VISITS
+Primary care office visit (code 99213): $25 copay after deductible.
+Specialist office visit: $50 copay after deductible.
+
+LABORATORY AND DIAGNOSTICS
+In-network diagnostic lab work such as a comprehensive metabolic panel
+(code 80053) is covered at 80% after the deductible is met.
+
+SURGERY AND HOSPITALIZATION
+Inpatient hospital stays and outpatient surgery are covered at 80% after the
+deductible. Prior authorization is required for scheduled inpatient procedures
+and most outpatient surgeries, including knee arthroscopy and joint procedures.
+Failure to obtain prior authorization may result in a $500 penalty.
+
+EMERGENCY SERVICES
+Emergency room visits are covered at 80% after a $300 ER facility copay. The
+copay is waived if you are admitted to the hospital.
+
+PRESCRIPTION DRUGS
+Tier 1 (generic): $10 copay. Tier 2 (preferred brand): $40 copay.
+Tier 3 (non-preferred brand): $75 copay. Specialty drugs: 25% coinsurance up to
+$250 per fill.
+
+DUPLICATE AND BILLING ERRORS
+If you are billed twice for the same service on the same date, or billed for a
+preventive service that should be covered at 100%, you may dispute the charge.
+Contact HR benefits support to open a billing review.
