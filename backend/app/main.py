@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.dependencies import AppServices
-from app.routers import chat, documents, eob, health, plan
+from app.routers import chat, documents, eob, health, plan, samples
 from app.services.benefits import SAMPLE_PLAN_NAME, sample_plan
 from app.services.gemini import GeminiService, GeminiUnavailableError
 from app.services.indexing import index_document, load_sample_policy
@@ -70,6 +70,7 @@ def create_app() -> FastAPI:
     app.include_router(documents.router)
     app.include_router(eob.router)
     app.include_router(plan.router)
+    app.include_router(samples.router)
     return app
 
 
