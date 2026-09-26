@@ -53,6 +53,7 @@ class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1)
     billed_amount: float | None = Field(
         default=None,
+        ge=0,
         description="Optional procedure cost to run an out-of-pocket estimate.",
     )
 
