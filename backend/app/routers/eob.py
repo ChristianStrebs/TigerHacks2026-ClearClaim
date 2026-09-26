@@ -15,6 +15,7 @@ logger = logging.getLogger("clearclaim.eob")
 
 _ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp", "application/pdf"}
 _MAX_UPLOAD_BYTES = 15 * 1024 * 1024
+_FULLY_COVERED_FLAG = "Your plan should cover this in full, so you shouldn't be charged."
 
 
 router = APIRouter(prefix="/api/eob", tags=["eob"])
@@ -39,9 +40,13 @@ def _parse_line_items(raw_items: object) -> list[EobLineItem]:
     items: list[EobLineItem] = []
     for raw in raw_items:
         try:
-            items.append(EobLineItem.model_validate(raw))
+            item = EobLineItem.model_validate(raw)
         except ValidationError:
             logger.warning("Skipping malformed EOB line item: %r", raw)
+            continue
+        if not item.flag and item.covered and item.plan_expected == 0 and item.billed > 0:
+            item.flag = _FULLY_COVERED_FLAG
+        items.append(item)
     return items
 
 
