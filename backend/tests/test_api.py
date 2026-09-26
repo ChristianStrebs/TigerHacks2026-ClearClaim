@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from app.schemas import BenefitsSnapshot
-from app.services.benefits import estimate_out_of_pocket
+from app.services.benefits import estimate_out_of_pocket, extract_dollar_amount
 from app.services.ingestion import chunk_text
 
 
@@ -75,6 +75,24 @@ def test_eob_scan_rejects_empty_file(client: TestClient) -> None:
 def test_chat_rejects_negative_procedure_cost(client: TestClient) -> None:
     resp = client.post("/api/chat", json={"message": "Cost?", "billed_amount": -5})
     assert resp.status_code == 422
+
+
+def test_chat_estimates_cost_from_amount_in_question(client: TestClient) -> None:
+    resp = client.post(
+        "/api/chat", json={"message": "How much will an $18,000 knee surgery cost me?"}
+    )
+    assert resp.status_code == 200
+    estimate = resp.json()["cost_estimate"]
+    assert estimate["billed_amount"] == 18000
+    # $1,550 remaining deductible + 20% of the other $16,450.
+    assert estimate["estimated_out_of_pocket"] == 4840
+
+
+def test_extract_dollar_amount_formats() -> None:
+    assert extract_dollar_amount("a $18,000 surgery") == 18000
+    assert extract_dollar_amount("about $2.5k") == 2500
+    assert extract_dollar_amount("$ 99.50 copay") == 99.5
+    assert extract_dollar_amount("no money mentioned") is None
 
 
 def test_chunking_overlaps() -> None:
