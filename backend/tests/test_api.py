@@ -2,20 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
 from fastapi.testclient import TestClient
 
-from app.main import create_app
 from app.schemas import BenefitsSnapshot
 from app.services.benefits import estimate_out_of_pocket
 from app.services.ingestion import chunk_text
-
-
-@pytest.fixture
-def client() -> TestClient:
-    app = create_app()
-    with TestClient(app) as c:
-        yield c
 
 
 def test_health_reports_demo_mode(client: TestClient) -> None:
@@ -73,6 +64,17 @@ def test_eob_scan_rejects_non_image(client: TestClient) -> None:
     files = {"file": ("notes.txt", b"hello", "text/plain")}
     resp = client.post("/api/eob/scan", files=files)
     assert resp.status_code == 415
+
+
+def test_eob_scan_rejects_empty_file(client: TestClient) -> None:
+    files = {"file": ("bill.png", b"", "image/png")}
+    resp = client.post("/api/eob/scan", files=files)
+    assert resp.status_code == 400
+
+
+def test_chat_rejects_negative_procedure_cost(client: TestClient) -> None:
+    resp = client.post("/api/chat", json={"message": "Cost?", "billed_amount": -5})
+    assert resp.status_code == 422
 
 
 def test_chunking_overlaps() -> None:
