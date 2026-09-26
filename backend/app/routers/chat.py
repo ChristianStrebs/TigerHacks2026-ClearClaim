@@ -2,13 +2,28 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends
 
 from app.dependencies import AppServices, get_services
 from app.schemas import ChatRequest, ChatResponse, Source
 from app.services.benefits import current_benefits, estimate_out_of_pocket
+from app.services.gemini import GeminiUnavailableError
+from app.services.vector_store import SearchHit
+
+logger = logging.getLogger("clearclaim.chat")
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
+
+
+def _retrieve(services: AppServices, question: str) -> list[SearchHit]:
+    try:
+        query_embedding = services.gemini.embed_query(question)
+    except GeminiUnavailableError:
+        logger.exception("Retrieval unavailable; answering without policy excerpts")
+        return []
+    return services.vector_store.search(query_embedding, k=4)
 
 
 @router.post("", response_model=ChatResponse)
@@ -16,8 +31,7 @@ def chat(
     payload: ChatRequest,
     services: AppServices = Depends(get_services),
 ) -> ChatResponse:
-    query_embedding = services.gemini.embed_query(payload.message)
-    hits = services.vector_store.search(query_embedding, k=4)
+    hits = _retrieve(services, payload.message)
 
     context = "\n\n".join(f"[{hit.document}] {hit.text}" for hit in hits)
     benefits = current_benefits(services.settings)
@@ -41,9 +55,9 @@ def chat(
     ]
 
     return ChatResponse(
-        answer=answer,
+        answer=answer.text,
         sources=sources,
         benefits=benefits,
         cost_estimate=cost_estimate,
-        demo_mode=not services.gemini.enabled,
+        demo_mode=not answer.live,
     )
