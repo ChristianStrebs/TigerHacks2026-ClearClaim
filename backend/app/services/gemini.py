@@ -2,9 +2,10 @@
 
 When no API key is configured the service transparently falls back to
 deterministic, offline behavior so the whole product is demoable without
-network access or secrets. Live calls that fail (bad key, unknown model,
-network drop) also fall back instead of surfacing a 500, and every result
-reports whether it actually came from Gemini so the UI can stay honest.
+network access or secrets. Live calls that fail (bad key, overloaded model,
+network drop) first retry on backup models, then fall back instead of
+surfacing a 500. Every result reports whether it actually came from Gemini so
+the UI can stay honest.
 """
 
 from __future__ import annotations
@@ -27,20 +28,54 @@ _TOKEN = re.compile(r"[a-z0-9]+")
 _EOB_INSTRUCTION = (
     "You are a medical billing expert. Extract every line item from this "
     "Explanation of Benefits or medical bill. For each line item return the "
-    "billing/CPT code, a short description, the billed amount, whether the "
-    "member's plan should cover it, and a flag string when the charge looks "
-    "like a duplicate, an upcode, or something the plan should have covered. "
-    "Use the provided plan summary to decide coverage. Respond ONLY with JSON."
+    "billing/CPT code, a short description, the billed amount, the amount the "
+    "member should owe under their plan (plan_expected), whether the plan should "
+    "cover it, and a flag string when the charge looks like a duplicate, an "
+    "upcode, or something the plan should have covered. Use an empty string for "
+    "flag when the line looks fine. Use the provided plan summary to decide "
+    "coverage. Write the summary in plain language. Respond ONLY with JSON."
 )
 
-_CHAT_INSTRUCTION = (
-    "You are ClearClaim, a friendly healthcare benefits copilot. Answer the "
-    "member's question using ONLY the provided policy excerpts and benefits "
-    "snapshot. Be concrete about dollar amounts and deductible status. If the "
-    "excerpts do not contain the answer, say so plainly. Never give clinical "
-    "or diagnostic medical advice — stay on administrative and financial "
-    "topics. Keep answers under 180 words."
+_CHAT_INSTRUCTION = """You are ClearClaim, a friendly healthcare benefits copilot for employees.
+- When policy excerpts are relevant, answer from them and be concrete about dollar
+  amounts and deductible status.
+- When the member asks a general question about employee health benefits (what a
+  deductible is, how coinsurance works, HSA vs FSA, open enrollment), explain it
+  clearly in general terms and note that exact numbers depend on their plan.
+- When the question needs plan details that are not in the excerpts, say so plainly
+  and invite them to submit their benefits with the + button.
+- When a cost estimate is provided, use exactly those dollar figures; never recompute.
+- Use plain language: short sentences, and define any insurance term the first time.
+- Never give clinical or diagnostic medical advice; stay on administrative and
+  financial topics.
+- Keep answers under 180 words. Use only simple markdown: **bold** and "- " bullets."""
+
+_OFFLINE_INVITE = (
+    "Submit your benefits with the + button, or ask a general question about "
+    "employee benefits, like \u201cWhat is a deductible?\u201d"
 )
+
+_GLOSSARY = {
+    "deductible": (
+        "A **deductible** is the amount you pay for covered care each year before "
+        "your plan starts paying its share."
+    ),
+    "coinsurance": (
+        "**Coinsurance** is the percentage of a bill you pay after your deductible "
+        "is met. With 20% coinsurance, you pay $20 of every $100 and the plan pays $80."
+    ),
+    "copay": (
+        "A **copay** is a flat fee, like $25, that you pay for a visit or prescription."
+    ),
+    "out-of-pocket": (
+        "The **out-of-pocket maximum** is the most you pay for covered care in a year. "
+        "After you hit it, the plan pays 100%."
+    ),
+    "premium": (
+        "A **premium** is what you pay every paycheck or month just to have the "
+        "plan, whether or not you use care."
+    ),
+}
 
 
 class GeminiUnavailableError(RuntimeError):
@@ -68,7 +103,7 @@ class GeminiService:
                     timeout=int(settings.gemini_timeout_seconds * 1000)
                 ),
             )
-            logger.info("Gemini enabled with model %s", settings.gemini_chat_model)
+            logger.info("Gemini enabled with models %s", settings.gemini_generation_models)
         else:
             logger.warning(
                 "GEMINI_API_KEY not set — running in DEMO MODE with offline "
@@ -83,6 +118,27 @@ class GeminiService:
         """Permanently switch to demo mode (used when startup indexing fails)."""
         logger.error("Disabling Gemini, falling back to demo mode: %s", reason)
         self._client = None
+
+    def _generate(
+        self, contents: types.ContentListUnion, config: types.GenerateContentConfig
+    ) -> str | None:
+        """Try the primary model, then each backup. Returns None if all fail."""
+        if self._client is None:
+            return None
+        config.automatic_function_calling = types.AutomaticFunctionCallingConfig(disable=True)
+        for model in self._settings.gemini_generation_models:
+            try:
+                response = self._client.models.generate_content(
+                    model=model, contents=contents, config=config
+                )
+            except Exception as exc:
+                logger.warning("Gemini model %s failed: %s", model, exc)
+                continue
+            text = (response.text or "").strip()
+            if text:
+                return text
+            logger.warning("Gemini model %s returned an empty response", model)
+        return None
 
     # ------------------------------------------------------------------ #
     # Embeddings
@@ -140,70 +196,58 @@ class GeminiService:
     # ------------------------------------------------------------------ #
     # Chat (RAG)
     # ------------------------------------------------------------------ #
-    def generate_answer(self, question: str, context: str, benefits: str) -> TextResult:
-        if self._client is None:
-            return TextResult(self._fallback_answer(question, context), live=False)
-
+    def generate_answer(
+        self, question: str, context: str, benefits: str, cost_note: str | None = None
+    ) -> TextResult:
         prompt = (
             f"Benefits snapshot:\n{benefits}\n\n"
-            f"Policy excerpts:\n{context}\n\n"
-            f"Member question: {question}"
+            f"Policy excerpts:\n{context or '(none found)'}\n\n"
+            + (f"Cost estimate (use these exact figures):\n{cost_note}\n\n" if cost_note else "")
+            + f"Member question: {question}"
         )
-        try:
-            response = self._client.models.generate_content(
-                model=self._settings.gemini_chat_model,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=_CHAT_INSTRUCTION,
-                    temperature=0.2,
-                ),
-            )
-        except Exception:
-            logger.exception("Gemini chat call failed; using offline answer")
-            return TextResult(self._fallback_answer(question, context), live=False)
-        text = (response.text or "").strip()
-        if not text:
+        text = self._generate(
+            prompt,
+            types.GenerateContentConfig(system_instruction=_CHAT_INSTRUCTION, temperature=0.2),
+        )
+        if text is None:
             return TextResult(self._fallback_answer(question, context), live=False)
         return TextResult(text, live=True)
 
     def _fallback_answer(self, question: str, context: str) -> str:
+        lowered = question.lower()
+        definitions = [d for term, d in _GLOSSARY.items() if term in lowered]
+        if definitions:
+            return "\n\n".join([*definitions, _OFFLINE_INVITE])
         if not context.strip():
-            return (
-                "[Demo mode] I couldn't find anything in your benefits documents "
-                "about that yet. Add a Gemini API key to enable full AI answers."
-            )
+            return f"I don't have an answer for that yet. {_OFFLINE_INVITE}"
         snippet = context.strip().split("\n\n")[0][:400]
         return (
-            "[Demo mode] Based on your plan documents, here's the most relevant "
-            f"excerpt I found:\n\n\u201c{snippet}\u2026\u201d\n\n"
-            "Add a GEMINI_API_KEY to get a fully synthesized answer with exact "
-            "dollar figures."
+            "Here's the part of your plan that looks most relevant:\n\n"
+            f"\u201c{snippet}\u2026\u201d\n\n{_OFFLINE_INVITE}"
         )
 
     # ------------------------------------------------------------------ #
     # Vision (EOB / bill scanner)
     # ------------------------------------------------------------------ #
     def analyze_eob(self, image_bytes: bytes, mime_type: str, policy_context: str) -> EobResult:
-        if self._client is None:
+        text = self._generate(
+            [
+                types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                f"Plan summary to check coverage against:\n{policy_context}",
+            ],
+            types.GenerateContentConfig(
+                system_instruction=_EOB_INSTRUCTION,
+                temperature=0.1,
+                response_mime_type="application/json",
+                response_schema=_EOB_SCHEMA,
+            ),
+        )
+        if text is None:
             return EobResult(self._fallback_eob(), live=False)
-
         try:
-            response = self._client.models.generate_content(
-                model=self._settings.gemini_chat_model,
-                contents=[
-                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-                    f"Plan summary to check coverage against:\n{policy_context}",
-                ],
-                config=types.GenerateContentConfig(
-                    system_instruction=_EOB_INSTRUCTION,
-                    temperature=0.1,
-                    response_mime_type="application/json",
-                    response_schema=_EOB_SCHEMA,
-                ),
-            )
-            return EobResult(json.loads(response.text or "{}"), live=True)
-        except Exception:
-            logger.exception("Gemini EOB scan failed; using sample analysis")
+            return EobResult(json.loads(text), live=True)
+        except json.JSONDecodeError:
+            logger.exception("Gemini returned invalid EOB JSON; using sample analysis")
             return EobResult(self._fallback_eob(), live=False)
 
     def _fallback_eob(self) -> dict:
@@ -249,9 +293,8 @@ class GeminiService:
                 "Line 4: office visit 99213 appears twice — likely a duplicate charge.",
             ],
             "summary": (
-                "[Demo mode] This sample EOB has two likely issues worth about "
-                "$255. Add a GEMINI_API_KEY to scan your real bills with Gemini "
-                "vision."
+                "Sample analysis: this bill has two likely mistakes worth about $255 — "
+                "a preventive blood draw that should be free and a duplicate office visit."
             ),
         }
 
