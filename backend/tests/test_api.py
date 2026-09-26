@@ -63,6 +63,13 @@ def test_eob_scan_flags_overcharges(client: TestClient) -> None:
     assert body["potential_savings"] == 565
 
 
+def test_eob_scan_accepts_iphone_heic_photos(client: TestClient) -> None:
+    resp = client.post("/api/eob/scan", files={"file": ("bill.heic", b"heic", "image/heic")})
+
+    assert resp.status_code == 200
+    assert resp.json()["demo_mode"] is True
+
+
 def test_fully_covered_lines_are_flagged_as_money_at_risk() -> None:
     items = _parse_line_items(
         [
