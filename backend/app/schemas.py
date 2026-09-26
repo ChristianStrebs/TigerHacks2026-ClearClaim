@@ -99,5 +99,9 @@ class EobScanResponse(BaseModel):
     total_billed: float
     line_items: list[EobLineItem]
     overcharge_flags: list[str]
+    potential_savings: float = Field(
+        default=0.0,
+        description="Sum of flagged charges the member may not owe (billed minus expected).",
+    )
     summary: str
     demo_mode: bool
