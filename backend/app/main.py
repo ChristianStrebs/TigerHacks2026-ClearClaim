@@ -4,17 +4,17 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
-from importlib import resources
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.dependencies import AppServices
-from app.routers import chat, documents, eob, health
+from app.routers import chat, documents, eob, health, plan
+from app.services.benefits import SAMPLE_PLAN_NAME, sample_plan
 from app.services.gemini import GeminiService, GeminiUnavailableError
-from app.services.ingestion import chunk_text
-from app.services.vector_store import Chunk, create_vector_store
+from app.services.indexing import index_document, load_sample_policy
+from app.services.vector_store import create_vector_store
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("clearclaim")
@@ -22,24 +22,14 @@ logger = logging.getLogger("clearclaim")
 
 def _seed_sample_policy(services: AppServices) -> None:
     """Index the bundled sample benefits policy so the demo works immediately."""
+    text = load_sample_policy()
     try:
-        text = resources.files("app.data").joinpath("sample_policy.txt").read_text()
-    except FileNotFoundError:
-        logger.warning("Sample policy not found; skipping seed.")
-        return
-    chunks = chunk_text(text)
-    try:
-        embeddings = services.gemini.embed_texts(chunks)
+        added = index_document(services, SAMPLE_PLAN_NAME, text)
     except GeminiUnavailableError as exc:
         # The index must use one embedding space, so a startup failure switches the
         # whole app to demo mode rather than mixing live and offline vectors.
         services.gemini.disable(str(exc))
-        embeddings = services.gemini.embed_texts(chunks)
-    records = [
-        Chunk(document="ACME Corp Health Plan (2026)", text=c, embedding=e)
-        for c, e in zip(chunks, embeddings, strict=True)
-    ]
-    added = services.vector_store.add(records)
+        added = index_document(services, SAMPLE_PLAN_NAME, text)
     logger.info("Seeded %d policy chunks into %s", added, services.vector_store.backend_name)
 
 
@@ -50,6 +40,7 @@ async def lifespan(app: FastAPI):
         settings=settings,
         gemini=GeminiService(settings),
         vector_store=create_vector_store(settings),
+        plan=sample_plan(settings),
     )
     app.state.services = services
     # Only auto-seed the in-memory store; a Supabase-backed store persists across
@@ -78,6 +69,7 @@ def create_app() -> FastAPI:
     app.include_router(chat.router)
     app.include_router(documents.router)
     app.include_router(eob.router)
+    app.include_router(plan.router)
     return app
 
 
