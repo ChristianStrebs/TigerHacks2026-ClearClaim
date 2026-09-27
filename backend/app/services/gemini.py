@@ -23,6 +23,7 @@ from google.genai import types
 from app.config import Settings
 from app.schemas import ChatTurn
 from app.services.benefits import extract_plan_numbers_offline
+from app.services.bills import mentions_bill
 
 logger = logging.getLogger("clearclaim.gemini")
 
@@ -88,6 +89,12 @@ _CHAT_INSTRUCTION = """You are ClearClaim, a friendly healthcare benefits copilo
 - Earlier messages in the conversation are context for follow-up questions like "what
   about a $5,000 one?". Always use the current benefits snapshot, which may have changed.
 - When a cost estimate is provided, use exactly those dollar figures; never recompute.
+- A "Latest scanned bill" section is the member's most recent bill. For questions about
+  their bill, charges, duplicates, or what to dispute, cite its line codes and dollar
+  amounts, explain why each flagged line may be wrong, and suggest calling the provider's
+  billing office or the insurer. Savings are possible, not guaranteed.
+- If they ask about a bill and no scanned bill is included, ask them to scan it on the
+  Scan tab first.
 - Use plain language: short sentences, and define any insurance term the first time.
 - Never give clinical or diagnostic medical advice; stay on administrative and
   financial topics.
@@ -247,10 +254,12 @@ class GeminiService:
         benefits: str,
         cost_note: str | None = None,
         history: Sequence[ChatTurn] = (),
+        bill: str | None = None,
     ) -> TextResult:
         prompt = (
             f"Benefits snapshot:\n{benefits}\n\n"
             f"Policy excerpts:\n{context or '(none found)'}\n\n"
+            + (f"Latest scanned bill:\n{bill}\n\n" if bill else "")
             + (f"Cost estimate (use these exact figures):\n{cost_note}\n\n" if cost_note else "")
             + f"Member question: {question}"
         )
@@ -267,10 +276,12 @@ class GeminiService:
             types.GenerateContentConfig(system_instruction=_CHAT_INSTRUCTION, temperature=0.2),
         )
         if text is None:
-            return TextResult(self._fallback_answer(question, context), live=False)
+            return TextResult(self._fallback_answer(question, context, bill), live=False)
         return TextResult(text, live=True)
 
-    def _fallback_answer(self, question: str, context: str) -> str:
+    def _fallback_answer(self, question: str, context: str, bill: str | None = None) -> str:
+        if bill and mentions_bill(question):
+            return f"Here's what I found on your latest bill:\n\n{bill}"
         lowered = question.lower()
         definitions = [d for term, d in _GLOSSARY.items() if term in lowered]
         if definitions:
