@@ -18,6 +18,7 @@ import {
 } from "./api";
 import { Icon } from "./Icon";
 import { chatHistory } from "./chatHistory";
+import { AnswerSteps } from "./components/AnswerSteps";
 import { ChoosePlan } from "./components/ChoosePlan";
 import { DisputeSheet } from "./components/DisputeSheet";
 import {
@@ -664,6 +665,7 @@ export default function App() {
                               </small>
                             </div>
                             <PolicyText text={turn.response.answer} />
+                            <AnswerSteps steps={turn.response.steps} />
                             {turn.response.cost_estimate && (
                               <div className="estimate">
                                 <small>ESTIMATED COST TO YOU</small>
