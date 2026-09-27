@@ -11,10 +11,12 @@ from fastapi.testclient import TestClient
 
 from app.auth import TokenVerifier
 from app.config import Settings
+from app.routers.plan import UNREADABLE_PDF_DETAIL
 from app.services.benefits import plan_from_extraction
 from app.services.gemini import EobResult, GeminiService, PlanResult
 from app.services.ingestion import chunk_text
 from app.services.storage import MemberStore
+from app.services.uploads import UNREADABLE_FILE_DETAIL
 from tests.pdf_utils import make_text_pdf
 from tests.test_auth import SETTINGS, SIGNING_KEY, _FakeJwks, _token
 
@@ -149,14 +151,39 @@ def test_long_documents_are_embedded_in_batches_the_api_accepts() -> None:
     assert batches == [100, 100, 50]
 
 
-def test_corrupt_pdf_gets_a_plain_message(client: TestClient) -> None:
+@pytest.mark.parametrize("route", ["/api/plan/upload", "/api/eob/scan"])
+@pytest.mark.parametrize(
+    ("content", "mime"),
+    [
+        pytest.param(b"this is not really a pdf", "application/pdf", id="text named .pdf"),
+        pytest.param(b"%PDF-1.4 hello", "image/png", id="pdf named .png"),
+        pytest.param(b"\xff\xd8\xff\xe0 jpeg", "image/webp", id="jpeg named .webp"),
+    ],
+)
+def test_file_that_is_not_what_it_claims_is_rejected_before_the_ai(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, route: str, content: bytes, mime: str
+) -> None:
+    gemini = client.app.state.services.gemini
+
+    def never(**_: object) -> None:
+        raise AssertionError("the AI should not see a damaged file")
+
+    monkeypatch.setattr(gemini, "extract_plan", never)
+    monkeypatch.setattr(gemini, "analyze_eob", never)
+
+    resp = client.post(route, files={"file": ("upload", content, mime)})
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == UNREADABLE_FILE_DETAIL
+
+
+def test_damaged_pdf_gets_a_plain_message(client: TestClient) -> None:
     resp = client.post(
         "/api/plan/upload",
-        files={"file": ("plan.pdf", b"\xff\xd8\xff\xe0 not really a pdf", "application/pdf")},
+        files={"file": ("plan.pdf", b"%PDF-1.4 truncated", "application/pdf")},
     )
     assert resp.status_code == 400
-    assert "PDF" in resp.json()["detail"]
-    assert "EOF" not in resp.json()["detail"]
+    assert resp.json()["detail"] == UNREADABLE_PDF_DETAIL
 
 
 @pytest.mark.parametrize(
