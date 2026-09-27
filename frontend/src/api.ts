@@ -1,5 +1,6 @@
 import type {
   ChatResponse,
+  ChatTurn,
   EobScanResponse,
   HealthResponse,
   PlanResponse,
@@ -48,11 +49,14 @@ export async function resetPlan(): Promise<PlanResponse> {
   return handle<PlanResponse>(res);
 }
 
-export async function sendChat(message: string): Promise<ChatResponse> {
+export async function sendChat(
+  message: string,
+  history: ChatTurn[] = [],
+): Promise<ChatResponse> {
   const res = await fetch(`${BASE_URL}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, history }),
   });
   return handle<ChatResponse>(res);
 }
