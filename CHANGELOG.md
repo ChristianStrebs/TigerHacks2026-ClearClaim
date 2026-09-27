@@ -85,6 +85,14 @@ Not yet merged into `main`.
   a "Your rights" card after the savings: what the protection is, which charges it covers,
   what you should owe, what to do, and a link to the official source. A note says it's
   general information, not legal advice.
+- **Dispute kit.** `POST /api/eob/scans/{scan_id}/dispute` returns `{letter, call_script,
+  checklist, deadline_note, demo_mode}` for a saved bill. Gemini writes it from the bill,
+  its patient protections, and the plan. When the AI is unavailable, a template fills in
+  the provider, every flagged charge, and each protection with its source, so the kit always
+  works. Personal details stay as `[Your name]`, `[Account number]`, and similar
+  placeholders. Surprise bills also point to the No Surprises Help Desk (1-800-985-3059).
+  Nothing is saved; the kit is written fresh each time. Returns `404` for an unknown scan
+  and `409` before a plan is chosen.
 - **Optional hosting configs.** `render.yaml` (backend on Render) and `frontend/vercel.json`
   (frontend on Vercel), with steps in the README's "Deploy (optional)" section. The app
   still runs fully locally without them.
