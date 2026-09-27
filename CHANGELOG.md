@@ -91,6 +91,9 @@ Not yet merged into `main`.
 
 ### Fixed
 
+- Opening the app right after signing in no longer fails with `503`. Supabase sometimes
+  rejects a brand-new token as "issued at future" when its clocks differ by a second; the
+  backend now waits a second and retries (up to twice) instead of giving up.
 - `CORS_ORIGINS` entries with a trailing slash (e.g. `https://clearclaim.vercel.app/`) now
   work. Before, the browser's origin wouldn't match and every request would be blocked.
 - Blank questions and questions over 4,000 characters now get `422` right away. Before,
