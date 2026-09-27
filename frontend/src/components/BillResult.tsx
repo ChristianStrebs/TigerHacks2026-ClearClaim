@@ -28,7 +28,8 @@ export function BillResult({ result }: { result: EobScanResponse }) {
         <div className="flags-card">
           <h4>
             <span aria-hidden="true">⚠ </span>
-            {result.overcharge_flags.length} things to review
+            {result.overcharge_flags.length}{" "}
+            {result.overcharge_flags.length === 1 ? "thing" : "things"} to review
           </h4>
           <ul>
             {result.overcharge_flags.map((f, i) => (
