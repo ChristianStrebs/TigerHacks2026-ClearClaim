@@ -12,11 +12,11 @@ from app.services.benefits import (
     plan_from_extraction,
     sample_plan,
 )
-from app.services.gemini import GeminiService, _PLAN_SCHEMA
+from app.services.gemini import _PLAN_SCHEMA, GeminiService
 from app.services.vector_store import (
     Chunk,
-    InMemoryVectorStore,
     IndexReplacementError,
+    InMemoryVectorStore,
     SupabaseVectorStore,
 )
 
@@ -95,10 +95,10 @@ def test_sample_summary_uses_configured_numbers() -> None:
     plan = sample_plan(
         Settings(DEMO_DEDUCTIBLE_TOTAL=3500, DEMO_COINSURANCE_RATE=0.125, DEMO_OOP_MAX=8000)
     )
-    assert "$3,500.00" in plan.summary
+    assert "$3,500 a year" in plan.summary
     assert "12.5%" in plan.summary
     assert "87.5%" in plan.summary
-    assert "$8,000.00" in plan.summary
+    assert "$8,000 a year" in plan.summary
 
 
 def test_failed_memory_replacement_preserves_searchable_old_index() -> None:
