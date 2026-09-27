@@ -54,7 +54,7 @@ def chat(
         f"Deductible: ${benefits.deductible_met:,.0f} of "
         f"${benefits.deductible_total:,.0f} met "
         f"(${benefits.deductible_remaining:,.0f} remaining). "
-        f"Coinsurance: {benefits.coinsurance_rate:.0%}. "
+        f"Coinsurance: {benefits.coinsurance_rate * 100:g}%. "
         f"Out-of-pocket max: ${benefits.oop_max:,.0f}."
     )
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import math
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -15,16 +16,17 @@ _OOP_MAX = re.compile(
     r"out[- ]of[- ]pocket\s+(?:max(?:imum)?|limit)[^$\n]{0,60}?\$\s?(\d[\d,]*)", re.IGNORECASE
 )
 _COINSURANCE = re.compile(
-    r"(\d{1,2})\s?%\s+coinsurance|coinsurance[^%\n]{0,40}?(\d{1,2})\s?%", re.IGNORECASE
+    r"(?<![\d.])(\d{1,3}(?:\.\d+)?)\s*%\s+coinsurance|coinsurance[^%\n]{0,40}?(\d{1,3}(?:\.\d+)?)\s*%",
+    re.IGNORECASE,
 )
 
 SAMPLE_PLAN_NAME = "ACME Corp Health Plan (2026)"
 
 _SAMPLE_SUMMARY = "\n".join(
     [
-        "- **Deductible:** $2,000 a year. You pay this first, before the plan shares costs.",
-        "- **Coinsurance:** after the deductible, you pay 20% and the plan pays 80%.",
-        "- **Out-of-pocket max:** $6,000 a year. After that, covered care is free.",
+        "- **Deductible:** ${deductible:,.2f} a year. You pay this first, before the plan shares costs.",
+        "- **Coinsurance:** after the deductible, you pay {member_percent:g}% and the plan pays {plan_percent:g}%.",
+        "- **Out-of-pocket max:** ${oop_max:,.2f} a year. After that, covered care is free.",
         "- **Free preventive care:** wellness visits, shots, and screenings cost $0.",
         "- **Copays:** $25 primary care, $50 specialist, $10 generic drugs.",
         "- **Watch out:** knee surgery and similar procedures need prior approval, "
@@ -55,24 +57,34 @@ def sample_plan(settings: Settings) -> PlanProfile:
         deductible_met=settings.demo_deductible_met,
         coinsurance_rate=settings.demo_coinsurance_rate,
         oop_max=settings.demo_oop_max,
-        summary=_SAMPLE_SUMMARY,
+        summary=_SAMPLE_SUMMARY.format(
+            deductible=settings.demo_deductible_total,
+            member_percent=settings.demo_coinsurance_rate * 100,
+            plan_percent=(1 - settings.demo_coinsurance_rate) * 100,
+            oop_max=settings.demo_oop_max,
+        ),
         summary_live=False,
         demo_fields=["deductible_total", "coinsurance_rate", "oop_max"],
     )
 
 
-def _positive(value: object) -> float | None:
-    if isinstance(value, bool) or not isinstance(value, int | float) or value <= 0:
+def _nonnegative(value: object) -> float | None:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int | float)
+        or value < 0
+        or not math.isfinite(value)
+    ):
         return None
     return float(value)
 
 
 def _coinsurance_rate(percent: object) -> float | None:
-    """Accept 20 (percent) or 0.2 (fraction); reject anything outside 0-100%."""
-    value = _positive(percent)
+    """coinsurance_percent is always a percentage: 1 means 1%, not a fraction."""
+    value = _nonnegative(percent)
     if value is None or value > 100:
         return None
-    return value / 100 if value > 1 else value
+    return value / 100
 
 
 def plan_from_extraction(
@@ -85,7 +97,7 @@ def plan_from_extraction(
     """
     demo_fields: list[PlanField] = []
 
-    deductible = _positive(extracted.get("deductible"))
+    deductible = _nonnegative(extracted.get("deductible"))
     if deductible is None:
         deductible = settings.demo_deductible_total
         demo_fields.append("deductible_total")
@@ -95,7 +107,7 @@ def plan_from_extraction(
         coinsurance = settings.demo_coinsurance_rate
         demo_fields.append("coinsurance_rate")
 
-    oop_max = _positive(extracted.get("oop_max"))
+    oop_max = _nonnegative(extracted.get("oop_max"))
     if oop_max is None:
         oop_max = settings.demo_oop_max
         demo_fields.append("oop_max")
@@ -132,9 +144,13 @@ def extract_plan_numbers_offline(text: str) -> dict:
         "oop_max": dollars(_OOP_MAX),
     }
     found = [
-        f"- **Deductible:** ${extracted['deductible']:,.0f}" if extracted["deductible"] else "",
-        f"- **Coinsurance:** {coinsurance:.0f}%" if coinsurance else "",
-        f"- **Out-of-pocket max:** ${extracted['oop_max']:,.0f}" if extracted["oop_max"] else "",
+        f"- **Deductible:** ${extracted['deductible']:,.0f}"
+        if extracted["deductible"] is not None
+        else "",
+        f"- **Coinsurance:** {coinsurance:g}%" if coinsurance is not None else "",
+        f"- **Out-of-pocket max:** ${extracted['oop_max']:,.0f}"
+        if extracted["oop_max"] is not None
+        else "",
     ]
     lines = [line for line in found if line]
     extracted["summary"] = (
@@ -195,7 +211,7 @@ def estimate_out_of_pocket(billed_amount: float, benefits: BenefitsSnapshot) -> 
     explanation = (
         f"Of the ${billed_amount:,.2f} billed, ${applied_to_deductible:,.2f} goes "
         f"toward your remaining ${benefits.deductible_remaining:,.2f} deductible, "
-        f"then you pay {benefits.coinsurance_rate:.0%} coinsurance "
+        f"then you pay {benefits.coinsurance_rate * 100:g}% coinsurance "
         f"(${coinsurance:,.2f}) on the rest. Estimated cost to you: "
         f"${out_of_pocket:,.2f}."
     )

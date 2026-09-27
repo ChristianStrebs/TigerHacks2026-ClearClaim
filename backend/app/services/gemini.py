@@ -36,7 +36,9 @@ Extract the member's in-network, individual numbers:
 - deductible: the annual deductible in dollars
 - coinsurance_percent: the member's share after the deductible, as a percent (20 means 20%)
 - oop_max: the annual out-of-pocket maximum in dollars
-Use 0 for any number the document does not state. Never guess.
+Use null for any number the document does not state. Zero is a valid stated value,
+not a missing-value marker. coinsurance_percent is always a percentage: 1 means 1%,
+0.5 means 0.5%, and 100 means 100%. Never guess.
 Write `summary` as 4-6 short bullet strings in plain language (8th-grade reading level):
 deductible, coinsurance, out-of-pocket max, free preventive care, common copays, and the
 biggest watch-outs such as prior authorization. Financial and administrative only; no
@@ -99,9 +101,7 @@ _GLOSSARY = {
         "**Coinsurance** is the percentage of a bill you pay after your deductible "
         "is met. With 20% coinsurance, you pay $20 of every $100 and the plan pays $80."
     ),
-    "copay": (
-        "A **copay** is a flat fee, like $25, that you pay for a visit or prescription."
-    ),
+    "copay": ("A **copay** is a flat fee, like $25, that you pay for a visit or prescription."),
     "out-of-pocket": (
         "The **out-of-pocket maximum** is the most you pay for covered care in a year. "
         "After you hit it, the plan pays 100%."
@@ -139,9 +139,7 @@ class GeminiService:
         if settings.gemini_enabled:
             self._client = genai.Client(
                 api_key=settings.gemini_api_key,
-                http_options=types.HttpOptions(
-                    timeout=int(settings.gemini_timeout_seconds * 1000)
-                ),
+                http_options=types.HttpOptions(timeout=int(settings.gemini_timeout_seconds * 1000)),
             )
             logger.info("Gemini enabled with models %s", settings.gemini_generation_models)
         else:
@@ -425,9 +423,9 @@ _PLAN_SCHEMA = {
     "type": "object",
     "properties": {
         "plan_name": {"type": "string"},
-        "deductible": {"type": "number"},
-        "coinsurance_percent": {"type": "number"},
-        "oop_max": {"type": "number"},
+        "deductible": {"type": "number", "nullable": True},
+        "coinsurance_percent": {"type": "number", "nullable": True},
+        "oop_max": {"type": "number", "nullable": True},
         "summary": {"type": "array", "items": {"type": "string"}},
         "full_text": {"type": "string"},
     },

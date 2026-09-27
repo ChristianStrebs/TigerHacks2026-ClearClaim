@@ -15,6 +15,7 @@ from app.services.benefits import (
 from app.services.gemini import GeminiUnavailableError
 from app.services.indexing import load_sample_policy, replace_index
 from app.services.ingestion import extract_pdf_text
+from app.services.vector_store import IndexReplacementError
 
 router = APIRouter(prefix="/api/plan", tags=["plan"])
 
@@ -46,6 +47,8 @@ def _apply_extracted_plan(
         replace_index(services, plan.name, document_text)
     except GeminiUnavailableError as exc:
         raise HTTPException(status_code=503, detail=_AI_UNREACHABLE) from exc
+    except IndexReplacementError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     services.plan = plan
     return plan_response(plan)
 
@@ -114,5 +117,7 @@ def reset_plan(services: AppServices = Depends(get_services)) -> PlanResponse:
         replace_index(services, SAMPLE_PLAN_NAME, load_sample_policy())
     except GeminiUnavailableError as exc:
         raise HTTPException(status_code=503, detail=_AI_UNREACHABLE) from exc
+    except IndexReplacementError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     services.plan = sample_plan(services.settings)
     return plan_response(services.plan)

@@ -124,13 +124,13 @@ def test_paste_without_numbers_is_honest_about_demo_values(client: TestClient) -
     }
 
 
-def test_coinsurance_accepts_percent_or_fraction_and_rejects_nonsense() -> None:
+def test_coinsurance_accepts_percentages_and_rejects_nonsense() -> None:
     settings = Settings()
 
     as_percent = plan_from_extraction(settings, "x", {"coinsurance_percent": 20}, True)
-    as_fraction = plan_from_extraction(settings, "x", {"coinsurance_percent": 0.25}, True)
+    sub_percent = plan_from_extraction(settings, "x", {"coinsurance_percent": 0.25}, True)
     nonsense = plan_from_extraction(settings, "x", {"coinsurance_percent": 250}, True)
 
     assert as_percent.coinsurance_rate == 0.2
-    assert as_fraction.coinsurance_rate == 0.25
+    assert sub_percent.coinsurance_rate == 0.0025
     assert "coinsurance_rate" in nonsense.demo_fields

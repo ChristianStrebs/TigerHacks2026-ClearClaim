@@ -35,7 +35,6 @@ def index_document(services: AppServices, title: str, text: str) -> int:
 
 
 def replace_index(services: AppServices, title: str, text: str) -> None:
-    """Make ``text`` the only indexed document; the old index survives any failure."""
+    """Build embeddings first, then replace the index in one store operation."""
     records = embed_document(services, title, text)
-    services.vector_store.clear()
-    services.vector_store.add(records)
+    services.vector_store.replace(records)
