@@ -5,18 +5,18 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 
-from app.dependencies import AppServices, get_services
+from app.dependencies import AppServices, get_services, member_store
 from app.schemas import PlanResponse, PlanTextRequest
 from app.services.benefits import (
-    SAMPLE_PLAN_NAME,
+    PlanProfile,
     plan_from_extraction,
     plan_response,
     sample_plan,
 )
 from app.services.gemini import GeminiUnavailableError
-from app.services.indexing import load_sample_policy, replace_index
+from app.services.indexing import embed_document, load_sample_policy
 from app.services.ingestion import extract_pdf_text
-from app.services.vector_store import IndexReplacementError
+from app.services.storage import MemberStore
 
 router = APIRouter(prefix="/api/plan", tags=["plan"])
 
@@ -30,8 +30,21 @@ NOT_BENEFITS_DETAIL = (
 )
 
 
+def _save_plan(
+    services: AppServices, store: MemberStore, plan: PlanProfile, document_text: str
+) -> PlanResponse:
+    """Embed first, then swap the plan in one step so a failure keeps the current plan."""
+    try:
+        chunks = embed_document(services.gemini, plan.name, document_text)
+    except GeminiUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=_AI_UNREACHABLE) from exc
+    saved = store.replace_plan(plan, chunks, services.gemini.embedding_space)
+    return plan_response(saved.profile)
+
+
 def _apply_extracted_plan(
     services: AppServices,
+    store: MemberStore,
     fallback_name: str,
     document_text: str,
     extracted: dict,
@@ -51,31 +64,27 @@ def _apply_extracted_plan(
         extracted=extracted,
         summary_live=summary_live,
     )
-    try:
-        replace_index(services, plan.name, document_text)
-    except GeminiUnavailableError as exc:
-        raise HTTPException(status_code=503, detail=_AI_UNREACHABLE) from exc
-    except IndexReplacementError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    services.set_plan(plan)
-    return plan_response(plan)
+    return _save_plan(services, store, plan, document_text)
 
 
 @router.get("", response_model=PlanResponse)
-def get_plan(services: AppServices = Depends(get_services)) -> PlanResponse:
-    return plan_response(services.plan)
+def get_plan(store: MemberStore = Depends(member_store)) -> PlanResponse:
+    saved = store.get_plan()
+    return plan_response(saved.profile if saved else None)
 
 
 @router.post("/text", response_model=PlanResponse)
 def ingest_plan_text(
     payload: PlanTextRequest,
     services: AppServices = Depends(get_services),
+    store: MemberStore = Depends(member_store),
 ) -> PlanResponse:
     """Paste policy text: extract numbers, write a plain-English summary, replace the index."""
     extraction = services.gemini.extract_plan(text=payload.text)
     document_text = payload.text or str(extraction.data.get("full_text") or "")
     return _apply_extracted_plan(
         services,
+        store,
         fallback_name=payload.title,
         document_text=document_text,
         extracted=extraction.data,
@@ -87,6 +96,7 @@ def ingest_plan_text(
 async def upload_plan(
     file: UploadFile = File(...),
     services: AppServices = Depends(get_services),
+    store: MemberStore = Depends(member_store),
 ) -> PlanResponse:
     mime_type = file.content_type or ""
     if mime_type != _PDF and mime_type not in _IMAGE_TYPES:
@@ -100,14 +110,14 @@ async def upload_plan(
     if len(data) > _MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="File is too large (15 MB max).")
 
-    # PDF parsing, Gemini, and embedding calls block, so keep them off the event loop.
+    # PDF parsing, Gemini, embedding, and database calls block, so keep them off the event loop.
     return await run_in_threadpool(
-        _read_uploaded_plan, services, data, mime_type, file.filename or "Your plan"
+        _read_uploaded_plan, services, store, data, mime_type, file.filename or "Your plan"
     )
 
 
 def _read_uploaded_plan(
-    services: AppServices, data: bytes, mime_type: str, file_name: str
+    services: AppServices, store: MemberStore, data: bytes, mime_type: str, file_name: str
 ) -> PlanResponse:
     text = ""
     if mime_type == _PDF:
@@ -120,6 +130,7 @@ def _read_uploaded_plan(
     extraction = services.gemini.extract_plan(text=text, file_bytes=data, mime_type=mime_type)
     return _apply_extracted_plan(
         services,
+        store,
         fallback_name=file_name,
         document_text=text or str(extraction.data.get("full_text") or ""),
         extracted=extraction.data,
@@ -129,21 +140,16 @@ def _read_uploaded_plan(
 
 @router.post("/sample", response_model=PlanResponse)
 @router.post("/reset", response_model=PlanResponse, include_in_schema=False)
-def use_sample_plan(services: AppServices = Depends(get_services)) -> PlanResponse:
+def use_sample_plan(
+    services: AppServices = Depends(get_services),
+    store: MemberStore = Depends(member_store),
+) -> PlanResponse:
     """Load the bundled sample plan when the member chooses to try sample data."""
-    try:
-        replace_index(services, SAMPLE_PLAN_NAME, load_sample_policy())
-    except GeminiUnavailableError as exc:
-        raise HTTPException(status_code=503, detail=_AI_UNREACHABLE) from exc
-    except IndexReplacementError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    services.set_plan(sample_plan(services.settings))
-    return plan_response(services.plan)
+    return _save_plan(services, store, sample_plan(services.settings), load_sample_policy())
 
 
 @router.post("/clear", response_model=PlanResponse)
-def clear_plan(services: AppServices = Depends(get_services)) -> PlanResponse:
-    """Start over: forget the active plan so the app asks the member to choose again."""
-    services.vector_store.clear()
-    services.set_plan(None)
+def clear_plan(store: MemberStore = Depends(member_store)) -> PlanResponse:
+    """Start over: forget the plan, its scans, and its chats so the app asks again."""
+    store.clear_plan()
     return plan_response(None)
