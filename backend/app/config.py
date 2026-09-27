@@ -33,11 +33,11 @@ class Settings(BaseSettings):
         alias="GEMINI_FALLBACK_MODELS",
     )
 
-    # Supabase (pgvector)
+    # Supabase: each request uses the member's own login token, so the backend only
+    # needs the public (publishable) key and row level security guards every row.
     supabase_url: str = Field(default="", alias="SUPABASE_URL")
-    supabase_service_role_key: str = Field(
-        default="", alias="SUPABASE_SERVICE_ROLE_KEY"
-    )
+    supabase_publishable_key: str = Field(default="", alias="SUPABASE_PUBLISHABLE_KEY")
+    supabase_timeout_seconds: float = Field(default=10, alias="SUPABASE_TIMEOUT_SECONDS")
 
     # CORS
     cors_origins: str = Field(
@@ -58,8 +58,8 @@ class Settings(BaseSettings):
 
     @property
     def supabase_enabled(self) -> bool:
-        """True when Supabase credentials are configured."""
-        return bool(self.supabase_url.strip() and self.supabase_service_role_key.strip())
+        """True when Supabase is configured; members must then sign in."""
+        return bool(self.supabase_url.strip() and self.supabase_publishable_key.strip())
 
     @property
     def gemini_generation_models(self) -> list[str]:
