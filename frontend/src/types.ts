@@ -44,6 +44,27 @@ export interface ChatResponse {
   demo_mode: boolean;
 }
 
+export type Network = "in" | "out" | "unknown";
+
+export type ProviderType =
+  | "facility"
+  | "primary_care"
+  | "specialist"
+  | "surgeon"
+  | "emergency_medicine"
+  | "anesthesiology"
+  | "radiology"
+  | "pathology"
+  | "laboratory"
+  | "neonatology"
+  | "assistant_surgeon"
+  | "hospitalist"
+  | "intensivist"
+  | "air_ambulance"
+  | "ground_ambulance"
+  | "pharmacy"
+  | "other";
+
 export interface EobLineItem {
   code: string;
   description: string;
@@ -51,6 +72,13 @@ export interface EobLineItem {
   plan_expected: number | null;
   covered: boolean;
   flag: string | null;
+  /** Whether the provider who billed this line is in network. */
+  network: Network;
+  /** Whether the hospital or surgery center where it happened is in network. */
+  facility_in_network: boolean | null;
+  emergency: boolean;
+  preventive: boolean;
+  provider_type: ProviderType;
 }
 
 export interface EobScanResponse {
