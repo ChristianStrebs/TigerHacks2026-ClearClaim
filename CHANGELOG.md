@@ -49,6 +49,19 @@ Not yet merged into `main`.
   (preventive care, No Surprises Act emergency, specialist, and air ambulance protections,
   the ground ambulance gap, duplicate charges, and appeals). Each has what you should owe,
   what to do, and an official source link. Not wired into the API yet.
+- **Bills count toward the deductible.** Each scan now returns `you_owe` (what the member
+  should pay once flagged charges are fixed), `applied_to_deductible`, and `file_sha256`.
+  The `benefits` in `GET /api/plan` and `POST /api/chat` add up `you_owe` across every
+  saved bill, capped at the deductible. Scanning the same file again replaces the earlier
+  scan instead of counting it twice. Gemini is told the deductible left before the bill, so
+  its per-line amounts match the member's progress.
+- **Remove one bill.** `DELETE /api/eob/scans/{scan_id}` returns `204` (or `404`), and the
+  bill stops counting toward the deductible.
+- **Web app: your bills and total price.** The Scan tab lists saved bills so earlier ones
+  can be reopened or removed. Each review starts with a "Your total price" card showing
+  what you owe, how much it added to the deductible, and the deductible meter. Home shows
+  "Your bill added $X to your deductible." Chat sees up to 5 recent bills, not just the
+  latest.
 - **Optional hosting configs.** `render.yaml` (backend on Render) and `frontend/vercel.json`
   (frontend on Vercel), with steps in the README's "Deploy (optional)" section. The app
   still runs fully locally without them.
