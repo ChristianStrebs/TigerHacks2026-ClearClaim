@@ -83,6 +83,21 @@ def test_live_extraction_distinguishes_zero_from_unknown(monkeypatch: pytest.Mon
     )
 
 
+def test_live_fraction_coinsurance_is_read_as_percent(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = GeminiService(Settings())
+    monkeypatch.setattr(
+        service,
+        "_generate",
+        lambda *_: (
+            '{"deductible":1000,"coinsurance_percent":0.3,"oop_max":5000,'
+            '"summary":[],"full_text":""}'
+        ),
+    )
+    extraction = service.extract_plan(text="A plan")
+    plan = plan_from_extraction(Settings(), "Plan", extraction.data, extraction.live)
+    assert plan.coinsurance_rate == pytest.approx(0.3)
+
+
 def test_zero_values_are_in_offline_summary() -> None:
     extraction = extract_plan_numbers_offline(
         "Deductible: $0. Coinsurance: 0%. Out-of-pocket maximum: $0."
