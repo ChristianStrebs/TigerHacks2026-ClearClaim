@@ -62,6 +62,12 @@ Not yet merged into `main`.
   what you owe, how much it added to the deductible, and the deductible meter. Home shows
   "Your bill added $X to your deductible." Chat sees up to 5 recent bills, not just the
   latest.
+- **Line item details for patient protections.** Each `line_items` entry now also has
+  `network` (`"in"`, `"out"`, or `"unknown"`), `facility_in_network` (`true`, `false`, or
+  `null`), `emergency`, `preventive`, and `provider_type` (for example `"facility"`,
+  `"anesthesiology"`, `"air_ambulance"`, or `"other"`). Gemini fills them from the bill.
+  Unrecognized values fall back to `"unknown"`, `null`, `false`, or `"other"` instead of
+  dropping the charge. Nothing uses them yet; the rights checks come next.
 - **Optional hosting configs.** `render.yaml` (backend on Render) and `frontend/vercel.json`
   (frontend on Vercel), with steps in the README's "Deploy (optional)" section. The app
   still runs fully locally without them.
