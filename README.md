@@ -67,52 +67,106 @@ supabase/
 
 ## Getting started
 
+Run ClearClaim on your own computer in about five minutes. You'll use two terminals:
+one for the backend and one for the frontend.
+
 ### Prerequisites
 
-- Python 3.11+ and `python3-venv`
-- Node 20+ and `pnpm`
+- [Python 3.12 or newer](https://www.python.org/downloads/) (tested on 3.13)
+- [Node.js](https://nodejs.org/) 20.19+ or 22.12+
+- pnpm: `npm install -g pnpm`
+- Optional: a free Gemini API key from
+  [Google AI Studio](https://aistudio.google.com/app/apikey). Without one the app runs
+  in demo mode (see [What works without a key](#what-works-without-a-key)).
 
-### 1. Backend
+### 1. Get the code
+
+```bash
+git clone https://github.com/ChristianStrebs/TigerHacks2026-ClearClaim.git
+cd TigerHacks2026-ClearClaim
+```
+
+### 2. Start the backend (terminal 1)
+
+macOS / Linux:
 
 ```bash
 cd backend
-python3 -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env          # optional: add GEMINI_API_KEY / Supabase creds
+cp .env.example .env
 uvicorn app.main:app --reload --port 8000
 ```
 
-API docs are served at http://localhost:8000/docs.
+Windows (PowerShell):
 
-### 2. Frontend
+```powershell
+cd backend
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+copy .env.example .env
+uvicorn app.main:app --reload --port 8000
+```
+
+If PowerShell blocks `Activate.ps1`, run
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once and try again.
+
+The copied `.env` already points at the shared ClearClaim Supabase project, so your
+plan, bills, and chats are saved online, privately for your browser. To use the real AI,
+put your key in `backend/.env` as `GEMINI_API_KEY=...` and restart the backend.
+
+Check http://localhost:8000/api/health. You should see `"status":"ok"`,
+`"supabase_enabled":true`, and `"gemini_enabled":true` if your key was picked up. API
+docs are at http://localhost:8000/docs.
+
+### 3. Start the frontend (terminal 2)
 
 ```bash
 cd frontend
 pnpm install
-cp .env.example .env          # optional
-pnpm dev                      # http://localhost:5173
+pnpm dev
 ```
 
-The Vite dev server proxies `/api` to `http://localhost:8000`, so no extra
-configuration is needed for local development.
+Open http://localhost:5173. The frontend needs no `.env`: the Vite dev server forwards
+`/api` to the backend on port 8000, and the app gets its Supabase settings from the
+backend.
 
-### One-command setup
+### What works without a key
 
-```bash
-bash .cursor/install.sh       # installs backend + frontend dependencies
-```
+- **No Gemini key:** the sample plan and both sample bills work fully, including the
+  rights check, cost math, and "Fix this bill" templates. Chat gives canned answers.
+  Your own bills and photos need a key, and the app says so.
+- **With a Gemini key:** everything, including your own plan and bill uploads and the
+  tool-using chat.
+- **Without Supabase** (both Supabase lines in `backend/.env` blank): your plan, bills,
+  and chats are kept in memory for one local user and are cleared when the backend
+  restarts.
+
+### Troubleshooting
+
+- **Port 8000 or 5173 already in use:** close whatever is using it; both ports are fixed.
+- **The app can't reach the server:** make sure the backend terminal is still running.
+- **"We couldn't start your private session":** Supabase limits new guest sign-ins per
+  network. Wait a bit and refresh, or blank both Supabase lines in `backend/.env` to run
+  fully offline.
+- **Try it on your phone:** on the same Wi-Fi, open `http://<your computer's IP>:5173`
+  (find the IP with `ipconfig` on Windows or `ifconfig` on macOS). Allow Node.js through
+  your firewall if asked.
 
 ## Enabling the real integrations
 
 1. **Gemini** — Get a key from [Google AI Studio](https://aistudio.google.com/app/apikey)
    and set `GEMINI_API_KEY` in `backend/.env`. Chat, embeddings, and the bill
    scanner will switch from demo mode to live Gemini calls automatically.
-2. **Supabase / pgvector** — Create a project, apply the migrations in
-   `supabase/migrations/`, and turn on Authentication → Sign In / Providers →
-   "Allow anonymous sign-ins". Set `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` in
-   `backend/.env`, and `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in
-   `frontend/.env.local`. Each browser then gets a private anonymous session, and its
-   plan, bill scans, and chats are saved in Postgres behind row level security.
+2. **Supabase / pgvector** — `backend/.env.example` already uses the shared ClearClaim
+   project. To use your own instead, create a project, apply the migrations in
+   `supabase/migrations/`, turn on Authentication → Sign In / Providers → "Allow
+   anonymous sign-ins", and set `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` in
+   `backend/.env`. The web app reads them from `/api/health`. Each browser gets a private
+   anonymous session, and its plan, bill scans, and chats are saved in Postgres behind
+   row level security.
 
 ## Deploy (optional)
 
@@ -125,8 +179,7 @@ one, the backend can run on Render and the frontend on Vercel using the included
    `CORS_ORIGINS` (the exact Vercel URL, no trailing slash). Check
    `https://<service>.onrender.com/api/health`.
 2. **Frontend (Vercel).** New Project → this repo → Root Directory `frontend`. Set
-   `VITE_API_BASE_URL` to the Render URL, plus `VITE_SUPABASE_URL` and
-   `VITE_SUPABASE_PUBLISHABLE_KEY`. Vercel reads `frontend/vercel.json`.
+   `VITE_API_BASE_URL` to the Render URL. Vercel reads `frontend/vercel.json`.
 3. **Supabase.** Raise Authentication → Rate Limits → anonymous sign-ins so judges on
    the same Wi-Fi aren't blocked.
 
@@ -162,9 +215,11 @@ Request/response shapes, mobile integration notes, and what changed recently are
 
 ## Testing
 
+With the backend's virtual environment active:
+
 ```bash
-cd backend && .venv/bin/pytest      # backend tests (offline)
-cd frontend && pnpm run build       # type-check + production build
+cd backend && pytest              # backend tests (offline, no keys needed)
+cd frontend && pnpm run build     # type-check + production build
 ```
 
 ## Security notes
