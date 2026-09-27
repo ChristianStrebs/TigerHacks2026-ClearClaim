@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from app.dependencies import AppServices, get_services
-from app.schemas import PlanResponse
+from app.schemas import PlanResponse, PlanTextRequest
 from app.services.benefits import (
     SAMPLE_PLAN_NAME,
     plan_from_extraction,
@@ -24,9 +24,52 @@ _MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 _AI_UNREACHABLE = "The AI service is unreachable right now. Please try again in a moment."
 
 
+def _apply_extracted_plan(
+    services: AppServices,
+    fallback_name: str,
+    document_text: str,
+    extracted: dict,
+    summary_live: bool,
+) -> PlanResponse:
+    if not document_text.strip():
+        raise HTTPException(
+            status_code=422,
+            detail=str(extracted.get("summary") or "Couldn't find any text to read."),
+        )
+    plan = plan_from_extraction(
+        services.settings,
+        fallback_name=fallback_name,
+        extracted=extracted,
+        summary_live=summary_live,
+    )
+    try:
+        replace_index(services, plan.name, document_text)
+    except GeminiUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=_AI_UNREACHABLE) from exc
+    services.plan = plan
+    return plan_response(plan)
+
+
 @router.get("", response_model=PlanResponse)
 def get_plan(services: AppServices = Depends(get_services)) -> PlanResponse:
     return plan_response(services.plan)
+
+
+@router.post("/text", response_model=PlanResponse)
+def ingest_plan_text(
+    payload: PlanTextRequest,
+    services: AppServices = Depends(get_services),
+) -> PlanResponse:
+    """Paste policy text: extract numbers, write a plain-English summary, replace the index."""
+    extraction = services.gemini.extract_plan(text=payload.text)
+    document_text = payload.text or str(extraction.data.get("full_text") or "")
+    return _apply_extracted_plan(
+        services,
+        fallback_name=payload.title,
+        document_text=document_text,
+        extracted=extraction.data,
+        summary_live=extraction.live,
+    )
 
 
 @router.post("/upload", response_model=PlanResponse)
@@ -55,25 +98,13 @@ async def upload_plan(
 
     # Text PDFs are sent as text; photos and scanned PDFs go to Gemini vision.
     extraction = services.gemini.extract_plan(text=text, file_bytes=data, mime_type=mime_type)
-    document_text = text or str(extraction.data.get("full_text") or "")
-    if not document_text.strip():
-        raise HTTPException(
-            status_code=422,
-            detail=str(extraction.data.get("summary") or "Couldn't find any text to read."),
-        )
-
-    plan = plan_from_extraction(
-        services.settings,
+    return _apply_extracted_plan(
+        services,
         fallback_name=file.filename or "Your plan",
+        document_text=text or str(extraction.data.get("full_text") or ""),
         extracted=extraction.data,
         summary_live=extraction.live,
     )
-    try:
-        replace_index(services, plan.name, document_text)
-    except GeminiUnavailableError as exc:
-        raise HTTPException(status_code=503, detail=_AI_UNREACHABLE) from exc
-    services.plan = plan
-    return plan_response(plan)
 
 
 @router.post("/reset", response_model=PlanResponse)
