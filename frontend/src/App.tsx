@@ -306,6 +306,8 @@ export default function App() {
   }
   async function scanBill(file?: File, sample?: SampleFile) {
     if (!available || !begin("scan")) return;
+    // A rejected file doesn't replace the saved review the chat still uses.
+    const previous = review;
     setScanError("");
     setReview(null);
     try {
@@ -313,6 +315,7 @@ export default function App() {
       if (!selected) throw new Error("Choose a bill to review.");
       setReview(await scanEob(selected));
     } catch (error) {
+      setReview(previous);
       setScanError(errorMessage(error));
     } finally {
       finish();
@@ -880,6 +883,7 @@ export default function App() {
             >
               <div className="message-field">
                 <input
+                  maxLength={4000}
                   value={question}
                   onChange={(event) => setQuestion(event.target.value)}
                   placeholder="Ask about your coverage…"
@@ -1060,6 +1064,7 @@ export default function App() {
                       <textarea
                         required
                         rows={5}
+                        maxLength={200000}
                         value={policyText}
                         onChange={(event) => setPolicyText(event.target.value)}
                         placeholder="Paste your benefits policy…"
