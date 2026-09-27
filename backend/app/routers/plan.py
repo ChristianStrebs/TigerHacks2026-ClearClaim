@@ -1,4 +1,4 @@
-"""The member's active plan: read it, replace it from a PDF/photo, or reset to the sample."""
+"""The member's active plan: choose the sample, submit their own, or start over."""
 
 from __future__ import annotations
 
@@ -110,9 +110,10 @@ async def upload_plan(
     )
 
 
-@router.post("/reset", response_model=PlanResponse)
-def reset_plan(services: AppServices = Depends(get_services)) -> PlanResponse:
-    """Go back to the bundled sample plan, e.g. between demo visitors."""
+@router.post("/sample", response_model=PlanResponse)
+@router.post("/reset", response_model=PlanResponse, include_in_schema=False)
+def use_sample_plan(services: AppServices = Depends(get_services)) -> PlanResponse:
+    """Load the bundled sample plan when the member chooses to try sample data."""
     try:
         replace_index(services, SAMPLE_PLAN_NAME, load_sample_policy())
     except GeminiUnavailableError as exc:
@@ -121,3 +122,11 @@ def reset_plan(services: AppServices = Depends(get_services)) -> PlanResponse:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     services.plan = sample_plan(services.settings)
     return plan_response(services.plan)
+
+
+@router.post("/clear", response_model=PlanResponse)
+def clear_plan(services: AppServices = Depends(get_services)) -> PlanResponse:
+    """Start over: forget the active plan so the app asks the member to choose again."""
+    services.vector_store.clear()
+    services.plan = None
+    return plan_response(None)
