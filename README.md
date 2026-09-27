@@ -93,10 +93,31 @@ bash .cursor/install.sh       # installs backend + frontend dependencies
 1. **Gemini** — Get a key from [Google AI Studio](https://aistudio.google.com/app/apikey)
    and set `GEMINI_API_KEY` in `backend/.env`. Chat, embeddings, and the bill
    scanner will switch from demo mode to live Gemini calls automatically.
-2. **Supabase / pgvector** — Create a project, run
-   `supabase/migrations/0001_init.sql`, and set `SUPABASE_URL` +
-   `SUPABASE_SERVICE_ROLE_KEY`. The backend will persist and search embeddings in
-   Postgres instead of memory.
+2. **Supabase / pgvector** — Create a project, apply the migrations in
+   `supabase/migrations/`, and turn on Authentication → Sign In / Providers →
+   "Allow anonymous sign-ins". Set `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` in
+   `backend/.env`, and `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in
+   `frontend/.env.local`. Each browser then gets a private anonymous session, and its
+   plan, bill scans, and chats are saved in Postgres behind row level security.
+
+## Deploy (optional)
+
+Everything above runs locally; hosting is only needed for a public link. When you want
+one, the backend can run on Render and the frontend on Vercel using the included
+`render.yaml` and `frontend/vercel.json`.
+
+1. **Backend (Render).** New → Blueprint → pick this repo. Render reads `render.yaml`.
+   Enter `GEMINI_API_KEY`, `SUPABASE_PUBLISHABLE_KEY`, and, once the frontend is up,
+   `CORS_ORIGINS` (the exact Vercel URL, no trailing slash). Check
+   `https://<service>.onrender.com/api/health`.
+2. **Frontend (Vercel).** New Project → this repo → Root Directory `frontend`. Set
+   `VITE_API_BASE_URL` to the Render URL, plus `VITE_SUPABASE_URL` and
+   `VITE_SUPABASE_PUBLISHABLE_KEY`. Vercel reads `frontend/vercel.json`.
+3. **Supabase.** Raise Authentication → Rate Limits → anonymous sign-ins so judges on
+   the same Wi-Fi aren't blocked.
+
+Render's free tier sleeps when idle. Open `/api/health` a couple of minutes before a
+demo to wake it.
 
 ## API reference
 
