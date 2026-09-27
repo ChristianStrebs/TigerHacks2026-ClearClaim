@@ -1,4 +1,6 @@
+import { accessToken, resetSession, sessionsEnabled } from "./session";
 import type {
+  ChatHistoryItem,
   ChatResponse,
   ChatTurn,
   EobScanResponse,
@@ -24,20 +26,42 @@ export class ApiError extends Error {
   }
 }
 
+async function authHeaders(init: RequestInit): Promise<Headers> {
+  const headers = new Headers(init.headers);
+  try {
+    const token = await accessToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+  } catch (error) {
+    throw new ApiError(
+      error instanceof Error
+        ? error.message
+        : "We couldn't start your session. Refresh the page.",
+    );
+  }
+  return headers;
+}
+
 async function request<T>(
   path: string,
   init: RequestInit = {},
   timeoutMs = READ_TIMEOUT_MS,
   read: (response: Response) => Promise<T> = (response) => response.json(),
+  retried = false,
 ): Promise<T> {
+  const headers = await authHeaders(init);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(`${BASE_URL}${path}`, {
       ...init,
+      headers,
       signal: controller.signal,
       cache: "no-store",
     });
+    if (response.status === 401 && sessionsEnabled && !retried) {
+      await resetSession();
+      return await request(path, init, timeoutMs, read, true);
+    }
     if (!response.ok) {
       let message = `Request failed (${response.status}). Please try again.`;
       try {
@@ -113,6 +137,8 @@ export const chooseSamplePlan = () =>
   jsonPost<PlanResponse>("/api/plan/sample");
 export const clearPlan = () => jsonPost<PlanResponse>("/api/plan/clear");
 export const getScans = () => request<EobScanResponse[]>("/api/eob/scans");
+export const getChatHistory = () =>
+  request<ChatHistoryItem[]>("/api/chat/history");
 export const submitPlanText = (title: string, text: string) =>
   jsonPost<PlanResponse>("/api/plan/text", { title, text });
 export const uploadPlan = (file: File) =>
