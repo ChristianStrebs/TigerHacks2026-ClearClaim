@@ -7,7 +7,7 @@ import logging
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import ValidationError
 
-from app.dependencies import AppServices, get_services
+from app.dependencies import AppServices, get_services, require_plan
 from app.schemas import EobLineItem, EobScanResponse
 from app.services.gemini import GeminiUnavailableError
 
@@ -70,6 +70,7 @@ async def scan_eob(
     file: UploadFile = File(...),
     services: AppServices = Depends(get_services),
 ) -> EobScanResponse:
+    require_plan(services)
     if file.content_type not in _ALLOWED_IMAGE_TYPES:
         raise HTTPException(
             status_code=415,
