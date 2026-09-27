@@ -35,7 +35,11 @@ def chat(
     payload: ChatRequest,
     services: AppServices = Depends(get_services),
 ) -> ChatResponse:
-    hits = _retrieve(services, payload.message)
+    previous_question = next(
+        (turn.text for turn in reversed(payload.history) if turn.role == "user"), ""
+    )
+    # Follow-ups like "what about a $5,000 one?" only make sense with the prior question.
+    hits = _retrieve(services, f"{previous_question}\n{payload.message}".strip())
 
     context = "\n\n".join(f"[{hit.document}] {hit.text}" for hit in hits)
     plan = services.plan
@@ -66,6 +70,7 @@ def chat(
         context,
         benefits_text,
         cost_note=cost_estimate.explanation if cost_estimate else None,
+        history=payload.history,
     )
 
     sources = [
