@@ -91,7 +91,6 @@ export default function App() {
   const [pending, setPending] = useState<Pending>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [question, setQuestion] = useState("");
-  const [cost, setCost] = useState("");
   const [review, setReview] = useState<EobScanResponse | null>(null);
   const [scanError, setScanError] = useState("");
   const [sheet, setSheet] = useState<Sheet>(null);
@@ -225,7 +224,6 @@ export default function App() {
     setTurns([]);
     setReview(null);
     setScanError("");
-    setCost("");
     setTitle("");
     setPolicyText("");
     setAttachedFile(null);
@@ -282,13 +280,11 @@ export default function App() {
   async function ask(message: string) {
     const trimmed = message.trim();
     if (!trimmed || !available || !begin("chat")) return;
-    const billed = cost === "" ? undefined : Number(cost);
     setQuestion("");
-    setCost("");
     setTab("chat");
     setTurns((old) => [...old, { question: trimmed }]);
     try {
-      const response = await sendChat(trimmed, chatHistory(turns), billed);
+      const response = await sendChat(trimmed, chatHistory(turns));
       setBenefits(response.benefits);
       setTurns((old) =>
         old.map((turn, index) =>
@@ -304,7 +300,6 @@ export default function App() {
         ),
       );
       setQuestion(trimmed);
-      setCost(billed === undefined ? "" : String(billed));
     } finally {
       finish();
     }
@@ -883,18 +878,6 @@ export default function App() {
                 void ask(question);
               }}
             >
-              <label className="cost-field">
-                <Icon name="wallet" size={16} />
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={cost}
-                  onChange={(event) => setCost(event.target.value)}
-                  placeholder="Procedure cost · optional"
-                  aria-label="Optional procedure cost in dollars"
-                />
-              </label>
               <div className="message-field">
                 <input
                   value={question}
