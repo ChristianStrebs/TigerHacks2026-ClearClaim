@@ -19,6 +19,7 @@ from app.services.gemini import EobResult
 from app.services.ingestion import chunk_text
 
 SAMPLE_BILL = SAMPLES_DIR / "sample-bill.pdf"
+PNG_BYTES = b"\x89PNG\r\n\x1a\nphoto"
 
 
 def test_health_reports_demo_mode(client: TestClient) -> None:
@@ -100,7 +101,8 @@ def test_eob_scan_accepts_iphone_heic_photos(
 ) -> None:
     _live_eob(monkeypatch, client, _BILL_REPLY)
 
-    resp = client.post("/api/eob/scan", files={"file": ("bill.heic", b"heic", "image/heic")})
+    heic = b"\x00\x00\x00\x24ftypheic\x00\x00\x00\x00mif1heic"
+    resp = client.post("/api/eob/scan", files={"file": ("bill.heic", heic, "image/heic")})
 
     assert resp.status_code == 200
     assert resp.json()["demo_mode"] is False
@@ -111,7 +113,7 @@ def test_file_that_is_not_a_bill_is_rejected(
 ) -> None:
     _live_eob(monkeypatch, client, {**_BILL_REPLY, "is_medical_bill": False, "line_items": []})
 
-    resp = client.post("/api/eob/scan", files={"file": ("recipe.png", b"img", "image/png")})
+    resp = client.post("/api/eob/scan", files={"file": ("recipe.png", PNG_BYTES, "image/png")})
 
     assert resp.status_code == 422
     assert resp.json()["detail"] == NOT_A_BILL_DETAIL
@@ -122,7 +124,7 @@ def test_bill_with_no_readable_charges_is_rejected(
 ) -> None:
     _live_eob(monkeypatch, client, {**_BILL_REPLY, "line_items": [], "total_billed": 0})
 
-    resp = client.post("/api/eob/scan", files={"file": ("blurry.png", b"img", "image/png")})
+    resp = client.post("/api/eob/scan", files={"file": ("blurry.png", PNG_BYTES, "image/png")})
 
     assert resp.status_code == 422
     assert resp.json()["detail"] == NO_CHARGES_DETAIL
@@ -148,7 +150,7 @@ def test_auto_flagged_lines_appear_in_review_list(
     )
 
     body = client.post(
-        "/api/eob/scan", files={"file": ("bill.png", b"img", "image/png")}
+        "/api/eob/scan", files={"file": ("bill.png", PNG_BYTES, "image/png")}
     ).json()
 
     assert len(body["overcharge_flags"]) == 2
