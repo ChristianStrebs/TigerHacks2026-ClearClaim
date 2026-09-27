@@ -11,26 +11,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.dependencies import AppServices
 from app.routers import chat, documents, eob, health, plan, samples
-from app.services.benefits import SAMPLE_PLAN_NAME, sample_plan
 from app.services.gemini import GeminiService, GeminiUnavailableError
-from app.services.indexing import index_document, load_sample_policy
 from app.services.vector_store import create_vector_store
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("clearclaim")
 
 
-def _seed_sample_policy(services: AppServices) -> None:
-    """Index the bundled sample benefits policy so the demo works immediately."""
-    text = load_sample_policy()
+def _check_embeddings(services: AppServices) -> None:
+    """Pick live or offline embeddings once, before anything is indexed."""
+    if not services.gemini.enabled:
+        return
     try:
-        added = index_document(services, SAMPLE_PLAN_NAME, text)
+        services.gemini.embed_query("ClearClaim startup check")
     except GeminiUnavailableError as exc:
         # The index must use one embedding space, so a startup failure switches the
         # whole app to demo mode rather than mixing live and offline vectors.
         services.gemini.disable(str(exc))
-        added = index_document(services, SAMPLE_PLAN_NAME, text)
-    logger.info("Seeded %d policy chunks into %s", added, services.vector_store.backend_name)
 
 
 @asynccontextmanager
@@ -40,13 +37,10 @@ async def lifespan(app: FastAPI):
         settings=settings,
         gemini=GeminiService(settings),
         vector_store=create_vector_store(settings),
-        plan=sample_plan(settings),
     )
     app.state.services = services
-    # Only auto-seed the in-memory store; a Supabase-backed store persists across
-    # restarts and should be seeded explicitly via the /api/documents endpoints.
-    if services.vector_store.backend_name == "in-memory":
-        _seed_sample_policy(services)
+    _check_embeddings(services)
+    logger.info("Ready; waiting for the member to choose the sample plan or their own")
     yield
 
 
