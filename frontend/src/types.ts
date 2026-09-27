@@ -81,6 +81,19 @@ export interface EobLineItem {
   provider_type: ProviderType;
 }
 
+/** A patient protection that may apply to some of a bill's charges. */
+export interface RightsFinding {
+  rule_id: string;
+  title: string;
+  explanation: string;
+  you_should_owe: string;
+  action: string;
+  /** The charges it applies to, as "description (code)". */
+  lines: string[];
+  source_name: string;
+  citation_url: string;
+}
+
 export interface EobScanResponse {
   scan_id: string;
   file_name: string;
@@ -97,6 +110,7 @@ export interface EobScanResponse {
   applied_to_deductible: number;
   /** Scanning the same file again replaces the earlier scan. */
   file_sha256: string | null;
+  rights: RightsFinding[];
   summary: string;
   demo_mode: boolean;
 }
