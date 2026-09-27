@@ -1,0 +1,64 @@
+{
+  "is_medical_bill": true,
+  "provider": "Mizzou Health Partners (sample)",
+  "total_billed": 565.0,
+  "line_items": [
+    {
+      "code": "99396",
+      "description": "Preventive visit, established, age 40-64",
+      "billed": 250.0,
+      "plan_expected": 0.0,
+      "covered": true,
+      "flag": "Annual wellness visit — preventive care is $0 under your plan.",
+      "network": "in",
+      "facility_in_network": null,
+      "emergency": false,
+      "preventive": true,
+      "provider_type": "primary_care"
+    },
+    {
+      "code": "90686",
+      "description": "Flu vaccine, preservative free",
+      "billed": 40.0,
+      "plan_expected": 0.0,
+      "covered": true,
+      "flag": "Routine vaccine — covered at 100% under your plan.",
+      "network": "in",
+      "facility_in_network": null,
+      "emergency": false,
+      "preventive": true,
+      "provider_type": "primary_care"
+    },
+    {
+      "code": "90471",
+      "description": "Vaccine administration",
+      "billed": 25.0,
+      "plan_expected": 0.0,
+      "covered": true,
+      "flag": "Giving the vaccine is part of preventive care — should be $0.",
+      "network": "in",
+      "facility_in_network": null,
+      "emergency": false,
+      "preventive": true,
+      "provider_type": "primary_care"
+    },
+    {
+      "code": "99396",
+      "description": "Preventive visit (duplicate charge)",
+      "billed": 250.0,
+      "plan_expected": 0.0,
+      "covered": false,
+      "flag": "Exact duplicate of line 1 on the same date.",
+      "network": "in",
+      "facility_in_network": null,
+      "emergency": false,
+      "preventive": true,
+      "provider_type": "primary_care"
+    }
+  ],
+  "overcharge_flags": [
+    "Lines 1-3: a wellness visit and flu shot are preventive care, which your plan covers at 100%.",
+    "Line 4: the wellness visit (99396) is billed twice on the same date."
+  ],
+  "summary": "Sample analysis: you were billed $565 for a wellness visit and flu shot that your plan covers in full, including a duplicate visit charge."
+}
