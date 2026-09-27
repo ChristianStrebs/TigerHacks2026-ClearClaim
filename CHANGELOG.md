@@ -21,6 +21,14 @@ Because backend and mobile work live in different folders, these merges should n
 
 ### Changed
 
+- **Supabase works on every machine that runs the repo.** `backend/.env.example` now
+  points at the shared ClearClaim project (URL and publishable key, both public), so
+  anyone who copies it saves their data there, privately per browser.
+- **Supabase is configured in one place.** `GET /api/health` now also returns
+  `supabase_url` and `supabase_publishable_key` (null without Supabase), and the web app
+  builds its Supabase client from them. `VITE_SUPABASE_URL` and
+  `VITE_SUPABASE_PUBLISHABLE_KEY` are no longer used, so the frontend and backend can't
+  disagree and cause "session expired" errors on every request.
 - README "Getting started" is written for someone running the repo for the first time:
   clone steps, separate macOS/Linux and Windows commands, what works without a Gemini
   key, and troubleshooting. Python 3.12+ is now listed because the pinned NumPy needs it.
