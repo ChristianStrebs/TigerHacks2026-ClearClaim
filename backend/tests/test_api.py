@@ -20,6 +20,16 @@ def test_health_reports_demo_mode(client: TestClient) -> None:
     assert body["indexed_chunks"] > 0
 
 
+def test_health_includes_benefits(client: TestClient) -> None:
+    body = client.get("/api/health").json()
+    benefits = body["benefits"]
+    assert benefits["deductible_total"] == 2000
+    assert benefits["deductible_met"] == 450
+    assert benefits["deductible_remaining"] == 1550
+    assert benefits["coinsurance_rate"] == 0.2
+    assert benefits["oop_max"] == 6000
+
+
 def test_chat_returns_answer_sources_and_benefits(client: TestClient) -> None:
     resp = client.post(
         "/api/chat",
