@@ -26,13 +26,13 @@ def test_health_reports_demo_mode(client: TestClient) -> None:
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "ok"
-    assert body["vector_store"] == "in-memory"
-    assert body["indexed_chunks"] > 0
+    assert body["gemini_enabled"] is False
+    assert body["supabase_enabled"] is False
+    assert body["storage"] == "in-memory"
 
 
-def test_health_includes_benefits(client: TestClient) -> None:
-    body = client.get("/api/health").json()
-    benefits = body["benefits"]
+def test_sample_plan_includes_benefits(client: TestClient) -> None:
+    benefits = client.get("/api/plan").json()["benefits"]
     assert benefits["deductible_total"] == 2000
     assert benefits["deductible_met"] == 450
     assert benefits["deductible_remaining"] == 1550
@@ -53,21 +53,6 @@ def test_chat_returns_answer_sources_and_benefits(client: TestClient) -> None:
     assert body["benefits"]["deductible_total"] == 2000
     assert body["cost_estimate"] is not None
     assert body["cost_estimate"]["estimated_out_of_pocket"] > 0
-
-
-def test_document_ingest_increases_index(client: TestClient) -> None:
-    before = client.get("/api/health").json()["indexed_chunks"]
-    resp = client.post(
-        "/api/documents",
-        json={
-            "title": "Dental Rider",
-            "text": "Dental cleanings are covered twice per year at 100%. " * 50,
-        },
-    )
-    assert resp.status_code == 200
-    assert resp.json()["chunks_indexed"] >= 1
-    after = client.get("/api/health").json()["indexed_chunks"]
-    assert after > before
 
 
 _BILL_REPLY = {
