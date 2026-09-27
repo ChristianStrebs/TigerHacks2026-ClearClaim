@@ -144,6 +144,10 @@ export interface HealthResponse {
   gemini_enabled: boolean;
   /** True when visitors sign in and their data is saved in Supabase. */
   supabase_enabled: boolean;
+  /** Where the web app signs visitors in; null without Supabase. */
+  supabase_url: string | null;
+  /** The project's public key; row level security protects the data. */
+  supabase_publishable_key: string | null;
   storage: "in-memory" | "supabase";
   chat_model: string;
   embed_model: string;
