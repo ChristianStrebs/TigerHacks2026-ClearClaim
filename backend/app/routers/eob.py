@@ -16,6 +16,8 @@ from pydantic import ValidationError
 from app.dependencies import AppServices, get_services, member_store, require_plan
 from app.routers.samples import SAMPLES_DIR
 from app.schemas import MAX_NAME_CHARS, EobLineItem, EobScanResponse
+from app.services.benefits import snapshot
+from app.services.bills import member_cost
 from app.services.indexing import search_plan
 from app.services.storage import MemberStore, PlanReplacedError, SavedPlan
 from app.services.uploads import UNREADABLE_FILE_DETAIL, matches_type
@@ -40,6 +42,7 @@ NO_CHARGES_DETAIL = (
     "I couldn't find any charges on this file. Make sure the whole bill is in view and the "
     "amounts are readable, then try again."
 )
+SCAN_GONE_DETAIL = "That bill scan isn't saved anymore."
 AI_DOWN_DETAIL = (
     "I can't read your bill right now because the AI service is unavailable. Try again in "
     "a moment, or tap Try sample bill to see how it works."
@@ -51,8 +54,8 @@ def _sample_bill_digest() -> str:
     return hashlib.sha256((SAMPLES_DIR / "sample-bill.pdf").read_bytes()).hexdigest()
 
 
-def _is_sample_bill(data: bytes) -> bool:
-    return hashlib.sha256(data).hexdigest() == _sample_bill_digest()
+def _is_sample_bill(digest: str) -> bool:
+    return digest == _sample_bill_digest()
 
 
 router = APIRouter(prefix="/api/eob", tags=["eob"])
@@ -148,13 +151,25 @@ def _review_bill(
     services: AppServices, store: MemberStore, data: bytes, mime_type: str, file_name: str
 ) -> EobScanResponse:
     plan = require_plan(store)
+    digest = hashlib.sha256(data).hexdigest()
+    # Scanning the same file again replaces the earlier copy rather than counting it twice.
+    ledger = store.bill_ledger()
+    replaced = [entry.scan_id for entry in ledger if entry.file_sha256 == digest]
+    owed_before = sum(entry.you_owe for entry in ledger if entry.file_sha256 != digest)
+    benefits = snapshot(plan.profile, owed_before)
+
     result = services.gemini.analyze_eob(
         image_bytes=data,
         mime_type=mime_type,
         policy_context=_policy_context(services, store, plan),
+        benefits=(
+            f"Deductible: ${benefits.deductible_met:,.2f} of ${benefits.deductible_total:,.2f} "
+            f"met (${benefits.deductible_remaining:,.2f} remaining). "
+            f"Coinsurance after the deductible: {benefits.coinsurance_rate * 100:g}%."
+        ),
     )
     # The offline result describes the sample bill, so never pass it off as the member's own.
-    if not result.live and not _is_sample_bill(data):
+    if not result.live and not _is_sample_bill(digest):
         raise HTTPException(status_code=503, detail=AI_DOWN_DETAIL)
     if result.data.get("is_medical_bill") is False:
         raise HTTPException(status_code=422, detail=NOT_A_BILL_DETAIL)
@@ -172,6 +187,8 @@ def _review_bill(
     total_billed = _money(result.data.get("total_billed"))
     if not total_billed:
         total_billed = round(sum(item.billed for item in line_items), 2)
+    you_owe = member_cost(line_items, benefits)
+
     scan = EobScanResponse(
         scan_id=str(uuid.uuid4()),
         file_name=file_name[:MAX_NAME_CHARS],
@@ -182,6 +199,9 @@ def _review_bill(
         line_items=line_items,
         overcharge_flags=flags,
         potential_savings=potential_savings(line_items),
+        you_owe=you_owe,
+        applied_to_deductible=round(min(you_owe, benefits.deductible_remaining), 2),
+        file_sha256=digest,
         summary=str(result.data.get("summary") or ""),
         demo_mode=not result.live,
     )
@@ -189,6 +209,9 @@ def _review_bill(
         store.add_scan(plan.id, scan)
     except PlanReplacedError:
         logger.info("Not saving a scan checked against a plan the member has since replaced")
+        return scan
+    for scan_id in replaced:
+        store.delete_scan(scan_id)
     return scan
 
 
@@ -202,8 +225,16 @@ def list_scans(store: MemberStore = Depends(member_store)) -> list[EobScanRespon
 def get_scan(scan_id: str, store: MemberStore = Depends(member_store)) -> EobScanResponse:
     scan = store.get_scan(scan_id)
     if scan is None:
-        raise HTTPException(status_code=404, detail="That bill scan isn't saved anymore.")
+        raise HTTPException(status_code=404, detail=SCAN_GONE_DETAIL)
     return scan
+
+
+@router.delete("/scans/{scan_id}", status_code=204)
+def delete_scan(scan_id: str, store: MemberStore = Depends(member_store)) -> None:
+    """Forget one bill, which also stops it counting toward the deductible."""
+    if store.get_scan(scan_id) is None:
+        raise HTTPException(status_code=404, detail=SCAN_GONE_DETAIL)
+    store.delete_scan(scan_id)
 
 
 @router.delete("/scans", status_code=204)
