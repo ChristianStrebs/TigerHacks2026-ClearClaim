@@ -1,4 +1,4 @@
-"""Retrieval-augmented chat endpoint."""
+"""Retrieval-augmented chat endpoint and the member's saved conversation."""
 
 from __future__ import annotations
 
@@ -6,42 +6,37 @@ import logging
 
 from fastapi import APIRouter, Depends
 
-from app.dependencies import AppServices, get_services, require_plan
-from app.schemas import ChatRequest, ChatResponse, Source
+from app.dependencies import AppServices, get_services, member_store, require_plan
+from app.schemas import ChatHistoryItem, ChatRequest, ChatResponse, Source
 from app.services.benefits import (
     estimate_out_of_pocket,
     extract_dollar_amount,
     snapshot,
 )
 from app.services.bills import describe_scan, mentions_bill
-from app.services.gemini import GeminiUnavailableError
-from app.services.vector_store import SearchHit
+from app.services.indexing import search_plan
+from app.services.storage import MemberStore, PlanReplacedError
 
 logger = logging.getLogger("clearclaim.chat")
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
-def _retrieve(services: AppServices, question: str) -> list[SearchHit]:
-    try:
-        query_embedding = services.gemini.embed_query(question)
-    except GeminiUnavailableError:
-        logger.exception("Retrieval unavailable; answering without policy excerpts")
-        return []
-    return services.vector_store.search(query_embedding, k=4)
-
-
 @router.post("", response_model=ChatResponse)
 def chat(
     payload: ChatRequest,
     services: AppServices = Depends(get_services),
+    store: MemberStore = Depends(member_store),
 ) -> ChatResponse:
-    plan = require_plan(services)
+    saved = require_plan(store)
+    plan = saved.profile
     previous_question = next(
         (turn.text for turn in reversed(payload.history) if turn.role == "user"), ""
     )
     # Follow-ups like "what about a $5,000 one?" only make sense with the prior question.
-    hits = _retrieve(services, f"{previous_question}\n{payload.message}".strip())
+    hits = search_plan(
+        services.gemini, store, saved, f"{previous_question}\n{payload.message}".strip()
+    )
 
     context = "\n\n".join(f"[{hit.document}] {hit.text}" for hit in hits)
     benefits = snapshot(plan)
@@ -59,7 +54,8 @@ def chat(
         f"Out-of-pocket max: ${benefits.oop_max:,.0f}."
     )
 
-    scan = services.latest_scan
+    latest = store.list_scans(limit=1)
+    scan = latest[0] if latest else None
     billed_amount = payload.billed_amount
     # "Why was I charged $250 twice?" is about the scanned bill, not a procedure to estimate.
     if billed_amount is None and not (scan and mentions_bill(payload.message)):
@@ -82,7 +78,7 @@ def chat(
         for hit in hits
     ]
 
-    return ChatResponse(
+    response = ChatResponse(
         answer=answer.text,
         sources=sources,
         benefits=benefits,
@@ -90,3 +86,17 @@ def chat(
         bill_scan_id=scan.scan_id if scan else None,
         demo_mode=not answer.live,
     )
+    try:
+        store.add_chat(saved.id, payload.message, response)
+    except PlanReplacedError:
+        logger.info("Not saving an answer about a plan the member has since replaced")
+    return response
+
+
+@router.get("/history", response_model=list[ChatHistoryItem])
+def chat_history(store: MemberStore = Depends(member_store)) -> list[ChatHistoryItem]:
+    """The conversation about the current plan, oldest first, so a refresh can restore it."""
+    return [
+        ChatHistoryItem(question=turn.question, response=turn.response)
+        for turn in store.list_chat()
+    ]
