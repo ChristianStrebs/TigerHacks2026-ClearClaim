@@ -45,6 +45,13 @@ Not yet merged into `main`.
 - **Database migrations** in `supabase/migrations/`: tables `plans`, `plan_chunks` (pgvector),
   `bill_scans`, and `chat_messages`, plus the `replace_plan` and `match_plan_chunks`
   functions. Changing or clearing a plan deletes its chunks, scans, and chats.
+- **Patient rights rules** in `backend/app/data/patient_rights.json`: 7 plain-language rules
+  (preventive care, No Surprises Act emergency, specialist, and air ambulance protections,
+  the ground ambulance gap, duplicate charges, and appeals). Each has what you should owe,
+  what to do, and an official source link. Not wired into the API yet.
+- **Optional hosting configs.** `render.yaml` (backend on Render) and `frontend/vercel.json`
+  (frontend on Vercel), with steps in the README's "Deploy (optional)" section. The app
+  still runs fully locally without them.
 
 ### Changed
 
@@ -65,6 +72,8 @@ Not yet merged into `main`.
 
 ### Fixed
 
+- `CORS_ORIGINS` entries with a trailing slash (e.g. `https://clearclaim.vercel.app/`) now
+  work. Before, the browser's origin wouldn't match and every request would be blocked.
 - Blank questions and questions over 4,000 characters now get `422` right away. Before,
   a long question was answered and then failed to save.
 - Pasted plan text is trimmed and limited to 200,000 characters. Titles are limited to 300.
