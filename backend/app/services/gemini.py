@@ -91,6 +91,22 @@ member should personally pay for that line under the plan summary provided.
   line items and a total of 0.
 Write the summary in plain language (8th-grade reading level). Respond ONLY with JSON."""
 
+_DISPUTE_INSTRUCTION = """You help patients challenge errors on a medical bill. From the bill
+review and plan excerpts, write:
+- letter: a short, polite, firm letter to the provider's billing office (under 300 words).
+  Name every flagged charge with its code, billed amount, and why it may be wrong. Name each
+  patient protection listed, with its source link. Say what the member expects to owe. Ask
+  for a corrected, itemized bill and a hold on collections during the review. Leave
+  [Your name], [Your address], [Phone number], [Account number], [Date of service], and
+  [Member ID] as bracketed placeholders; never invent personal details, dates, or numbers.
+- call_script: 5-8 short lines the member says on the phone, in order, ending with asking
+  for the representative's name and a reference number.
+- checklist: 4-7 short steps, in order.
+- deadline_note: one or two sentences on acting promptly. Only give a specific deadline
+  when the review supports it, such as 180 days to appeal a denied claim.
+Use only facts from the bill review. Plain language (8th-grade reading level). Don't
+threaten legal action or claim to give legal advice. Respond ONLY with JSON."""
+
 _CHAT_INSTRUCTION = """You are ClearClaim, a friendly healthcare benefits copilot for employees.
 - The benefits snapshot and policy excerpts ARE the member's plan. Answer from them
   directly and confidently, with concrete dollar amounts and deductible status. Never
@@ -161,6 +177,11 @@ class EobResult(NamedTuple):
 
 
 class PlanResult(NamedTuple):
+    data: dict
+    live: bool
+
+
+class DisputeResult(NamedTuple):
     data: dict
     live: bool
 
@@ -402,6 +423,32 @@ class GeminiService:
             return EobResult({}, live=False)
         return EobResult(data, live=True)
 
+    # ------------------------------------------------------------------ #
+    # Dispute kit
+    # ------------------------------------------------------------------ #
+    def draft_dispute(self, bill: str, plan_excerpts: str) -> DisputeResult:
+        """Write a letter, call script, and checklist for a reviewed bill."""
+        text = self._generate(
+            f"Bill review:\n{bill}\n\nPlan excerpts:\n{plan_excerpts or '(none found)'}",
+            types.GenerateContentConfig(
+                system_instruction=_DISPUTE_INSTRUCTION,
+                temperature=0.2,
+                response_mime_type="application/json",
+                response_schema=_DISPUTE_SCHEMA,
+            ),
+        )
+        # Without a live draft, the caller fills in its template instead.
+        if text is None:
+            return DisputeResult({}, live=False)
+        try:
+            data = json.loads(text)
+            if not isinstance(data, dict):
+                raise ValueError("expected a JSON object")
+        except ValueError:
+            logger.exception("Gemini returned invalid dispute JSON")
+            return DisputeResult({}, live=False)
+        return DisputeResult(data, live=True)
+
 
 # JSON schema handed to Gemini for structured EOB extraction.
 _EOB_SCHEMA = {
@@ -443,6 +490,17 @@ _EOB_SCHEMA = {
         "summary": {"type": "string"},
     },
     "required": ["is_medical_bill", "total_billed", "line_items", "overcharge_flags", "summary"],
+}
+
+_DISPUTE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "letter": {"type": "string"},
+        "call_script": {"type": "array", "items": {"type": "string"}},
+        "checklist": {"type": "array", "items": {"type": "string"}},
+        "deadline_note": {"type": "string"},
+    },
+    "required": ["letter", "call_script", "checklist", "deadline_note"],
 }
 
 _PLAN_SCHEMA = {
