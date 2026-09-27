@@ -17,6 +17,7 @@ from app.services.gemini import GeminiUnavailableError
 from app.services.indexing import embed_document, load_sample_policy
 from app.services.ingestion import extract_pdf_text
 from app.services.storage import MemberStore
+from app.services.uploads import UNREADABLE_FILE_DETAIL, matches_type
 
 router = APIRouter(prefix="/api/plan", tags=["plan"])
 
@@ -113,6 +114,8 @@ async def upload_plan(
         raise HTTPException(status_code=400, detail="Uploaded file was empty.")
     if len(data) > _MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="File is too large (15 MB max).")
+    if not matches_type(data, mime_type):
+        raise HTTPException(status_code=400, detail=UNREADABLE_FILE_DETAIL)
 
     # PDF parsing, Gemini, embedding, and database calls block, so keep them off the event loop.
     return await run_in_threadpool(
