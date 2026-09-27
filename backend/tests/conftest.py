@@ -22,6 +22,14 @@ def offline_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 
 @pytest.fixture
-def client() -> Iterator[TestClient]:
+def fresh_client() -> Iterator[TestClient]:
+    """The app as a new visitor sees it: no plan chosen yet."""
     with TestClient(create_app()) as c:
         yield c
+
+
+@pytest.fixture
+def client(fresh_client: TestClient) -> TestClient:
+    """The app after the visitor chose "Try with sample data"."""
+    fresh_client.post("/api/plan/sample").raise_for_status()
+    return fresh_client
