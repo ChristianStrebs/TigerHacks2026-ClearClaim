@@ -124,6 +124,10 @@ Not yet merged into `main`.
   `backend/.env`, and `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in
   `frontend/.env.local`. The service role key is no longer used. In the Supabase dashboard,
   turn on Authentication → Sign In / Providers → "Allow anonymous sign-ins".
+- Docs: the README now covers every current feature and route, and
+  `docs/frontend-integration.md` is a short guide to building a client (sessions, the
+  plan → bill → dispute → chat flow, uploads, errors, and timeouts). It replaces the old
+  instructions for applying a patch ZIP.
 
 ### Removed
 
