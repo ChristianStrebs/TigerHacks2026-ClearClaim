@@ -6,7 +6,7 @@ import logging
 
 from fastapi import APIRouter, Depends
 
-from app.dependencies import AppServices, get_services
+from app.dependencies import AppServices, get_services, require_plan
 from app.schemas import ChatRequest, ChatResponse, Source
 from app.services.benefits import (
     estimate_out_of_pocket,
@@ -35,6 +35,7 @@ def chat(
     payload: ChatRequest,
     services: AppServices = Depends(get_services),
 ) -> ChatResponse:
+    plan = require_plan(services)
     previous_question = next(
         (turn.text for turn in reversed(payload.history) if turn.role == "user"), ""
     )
@@ -42,7 +43,6 @@ def chat(
     hits = _retrieve(services, f"{previous_question}\n{payload.message}".strip())
 
     context = "\n\n".join(f"[{hit.document}] {hit.text}" for hit in hits)
-    plan = services.plan
     benefits = snapshot(plan)
     plan_note = (
         "This is a sample demo plan; the member has not submitted their own benefits yet."
