@@ -13,6 +13,7 @@ from app.auth import Member
 from app.config import Settings
 from app.main import STORAGE_DOWN_DETAIL
 from app.schemas import BenefitsSnapshot, ChatResponse, EobScanResponse
+from app.services import storage as storage_module
 from app.services.benefits import sample_plan
 from app.services.storage import (
     Chunk,
@@ -144,6 +145,39 @@ def test_supabase_scan_for_a_replaced_plan_is_reported() -> None:
     )
     with pytest.raises(PlanReplacedError):
         storage.for_member(ALICE).add_scan("old-plan", _scan())
+
+
+ISSUED_IN_FUTURE = {"code": "PGRST303", "message": "JWT issued at future"}
+
+
+@pytest.fixture
+def no_clock_skew_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(storage_module, "_CLOCK_SKEW_WAIT_SECONDS", 0)
+
+
+@pytest.mark.usefixtures("no_clock_skew_wait")
+def test_supabase_retries_a_token_signed_a_moment_ahead_of_its_clock() -> None:
+    replies = iter([httpx.Response(401, json=ISSUED_IN_FUTURE), httpx.Response(200, json=[])])
+    storage, requests = _supabase(lambda _: next(replies))
+    assert storage.for_member(ALICE).list_scans() == []
+    assert len(requests) == 2
+
+
+@pytest.mark.usefixtures("no_clock_skew_wait")
+def test_supabase_gives_up_when_the_token_stays_in_the_future() -> None:
+    storage, requests = _supabase(lambda _: httpx.Response(401, json=ISSUED_IN_FUTURE))
+    with pytest.raises(StorageError):
+        storage.for_member(ALICE).list_scans()
+    assert len(requests) == 3
+
+
+def test_supabase_does_not_retry_other_rejections() -> None:
+    storage, requests = _supabase(
+        lambda _: httpx.Response(401, json={"code": "PGRST301", "message": "JWT expired"})
+    )
+    with pytest.raises(StorageError):
+        storage.for_member(ALICE).list_scans()
+    assert len(requests) == 1
 
 
 def test_supabase_plan_row_round_trips() -> None:
