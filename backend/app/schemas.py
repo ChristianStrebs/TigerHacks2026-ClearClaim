@@ -139,6 +139,18 @@ class EobScanResponse(BaseModel):
         default=0.0,
         description="Sum of flagged charges the member may not owe (billed minus expected).",
     )
+    you_owe: float = Field(
+        default=0.0,
+        description="What the member should pay for this bill once flagged charges are fixed.",
+    )
+    applied_to_deductible: float = Field(
+        default=0.0,
+        description="How much of you_owe counted toward the deductible when it was scanned.",
+    )
+    file_sha256: str | None = Field(
+        default=None,
+        description="Fingerprint of the uploaded file; scanning the same file replaces this scan.",
+    )
     summary: str
     demo_mode: bool
 
