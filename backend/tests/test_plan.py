@@ -21,7 +21,7 @@ def _upload(client: TestClient, content: bytes, name: str, mime: str):
     return client.post("/api/plan/upload", files={"file": (name, content, mime)})
 
 
-def test_starts_with_sample_plan_flagged_as_demo(client: TestClient) -> None:
+def test_sample_plan_is_flagged_as_demo(client: TestClient) -> None:
     body = client.get("/api/plan").json()
     assert body["source"] == "demo"
     assert body["benefits"]["deductible_total"] == 2000
