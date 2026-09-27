@@ -74,6 +74,13 @@ Not yet merged into `main`.
   `"Anesthesia (00142)"`. Gemini only reads the facts off the bill; plain rules decide
   which protection applies, so the same bill always gets the same answer. The chat sees
   these findings too. Scans saved earlier return `rights: []`.
+- **Second sample bill: a surprise bill.** `surprise-bill.pdf` is a $2,700 bill from an
+  out-of-network anesthesiologist at an in-network surgery center. It scans to the No
+  Surprises Act protection, with or without live AI: at most $1,780 owed (the in-network
+  share on the sample plan) and $920 to question. Gemini is told protected out-of-network
+  lines still carry in-network cost sharing, never $0.
+  Each sample in `GET /api/samples` now has a `label` for buttons and menus. The web app
+  shows one "Try sample" button per sample bill.
 - **Optional hosting configs.** `render.yaml` (backend on Render) and `frontend/vercel.json`
   (frontend on Vercel), with steps in the README's "Deploy (optional)" section. The app
   still runs fully locally without them.
