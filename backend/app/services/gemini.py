@@ -14,15 +14,19 @@ import hashlib
 import json
 import logging
 import re
+from collections.abc import Sequence
 from typing import NamedTuple
 
 from google import genai
 from google.genai import types
 
 from app.config import Settings
+from app.schemas import ChatTurn
 from app.services.benefits import extract_plan_numbers_offline
 
 logger = logging.getLogger("clearclaim.gemini")
+
+_MAX_HISTORY_TURNS = 10
 
 _MAX_PLAN_CHARS = 40_000
 
@@ -73,6 +77,8 @@ _CHAT_INSTRUCTION = """You are ClearClaim, a friendly healthcare benefits copilo
   and suggest confirming with HR or the insurer. Never guess or fill gaps with typical
   plan rules.
 - Don't mention that the plan is a sample plan; the app already labels sample numbers.
+- Earlier messages in the conversation are context for follow-up questions like "what
+  about a $5,000 one?". Always use the current benefits snapshot, which may have changed.
 - When a cost estimate is provided, use exactly those dollar figures; never recompute.
 - Use plain language: short sentences, and define any insurance term the first time.
 - Never give clinical or diagnostic medical advice; stay on administrative and
@@ -231,7 +237,12 @@ class GeminiService:
     # Chat (RAG)
     # ------------------------------------------------------------------ #
     def generate_answer(
-        self, question: str, context: str, benefits: str, cost_note: str | None = None
+        self,
+        question: str,
+        context: str,
+        benefits: str,
+        cost_note: str | None = None,
+        history: Sequence[ChatTurn] = (),
     ) -> TextResult:
         prompt = (
             f"Benefits snapshot:\n{benefits}\n\n"
@@ -239,8 +250,16 @@ class GeminiService:
             + (f"Cost estimate (use these exact figures):\n{cost_note}\n\n" if cost_note else "")
             + f"Member question: {question}"
         )
+        contents = [
+            types.Content(
+                role="user" if turn.role == "user" else "model",
+                parts=[types.Part(text=turn.text)],
+            )
+            for turn in history[-_MAX_HISTORY_TURNS:]
+        ]
+        contents.append(types.Content(role="user", parts=[types.Part(text=prompt)]))
         text = self._generate(
-            prompt,
+            contents,
             types.GenerateContentConfig(system_instruction=_CHAT_INSTRUCTION, temperature=0.2),
         )
         if text is None:
