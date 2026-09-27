@@ -1,4 +1,4 @@
-﻿"""Bill scans are remembered so the member can come back to them and ask about them."""
+"""Bill scans are remembered so the member can come back to them and ask about them."""
 
 from __future__ import annotations
 
