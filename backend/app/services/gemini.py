@@ -30,6 +30,9 @@ logger = logging.getLogger("clearclaim.gemini")
 _MAX_HISTORY_TURNS = 10
 
 _MAX_PLAN_CHARS = 40_000
+_MIN_TEXT_LAYER_CHARS = 200
+# The Gemini API accepts at most 100 texts per embedding request.
+_EMBED_BATCH_SIZE = 100
 
 _PLAN_INSTRUCTION = """You read health insurance benefit documents: Summaries of Benefits and
 Coverage, plan booklets, and photos of benefits pages or cards.
@@ -205,18 +208,21 @@ class GeminiService:
             return []
         if self._client is None:
             return [self._fallback_embedding(t) for t in texts]
-        try:
-            response = self._client.models.embed_content(
-                model=self._settings.gemini_embed_model,
-                contents=texts,
-                config=types.EmbedContentConfig(
-                    output_dimensionality=self._settings.embed_dim,
-                    task_type="RETRIEVAL_DOCUMENT",
-                ),
-            )
-        except Exception as exc:
-            raise GeminiUnavailableError(f"Embedding documents failed: {exc}") from exc
-        return [list(e.values) for e in response.embeddings]
+        embeddings: list[list[float]] = []
+        for start in range(0, len(texts), _EMBED_BATCH_SIZE):
+            try:
+                response = self._client.models.embed_content(
+                    model=self._settings.gemini_embed_model,
+                    contents=texts[start : start + _EMBED_BATCH_SIZE],
+                    config=types.EmbedContentConfig(
+                        output_dimensionality=self._settings.embed_dim,
+                        task_type="RETRIEVAL_DOCUMENT",
+                    ),
+                )
+            except Exception as exc:
+                raise GeminiUnavailableError(f"Embedding documents failed: {exc}") from exc
+            embeddings.extend(list(e.values) for e in response.embeddings)
+        return embeddings
 
     def embed_query(self, text: str) -> list[float]:
         if self._client is None:
@@ -312,7 +318,8 @@ class GeminiService:
     ) -> PlanResult:
         """Read plan numbers and a plain-language summary from text or an image/PDF."""
         contents: types.ContentListUnion
-        if text.strip():
+        # A scanned PDF's text layer is often just page numbers, so read its pages instead.
+        if text.strip() and (not file_bytes or len(text.strip()) >= _MIN_TEXT_LAYER_CHARS):
             contents = f"Benefits document text:\n{text[:_MAX_PLAN_CHARS]}"
         else:
             contents = [
@@ -331,6 +338,8 @@ class GeminiService:
         if raw is not None:
             try:
                 data = json.loads(raw)
+                if not isinstance(data, dict):
+                    raise ValueError("expected a JSON object")
                 percent = data.get("coinsurance_percent")
                 # Models sometimes answer 0.3 for 30%; real plans never have sub-1% coinsurance.
                 if isinstance(percent, int | float) and not isinstance(percent, bool):
@@ -340,7 +349,7 @@ class GeminiService:
                 if isinstance(points, list):
                     data["summary"] = "\n".join(f"- {str(p).lstrip('-• ').strip()}" for p in points)
                 return PlanResult(data, live=True)
-            except json.JSONDecodeError:
+            except ValueError:
                 logger.exception("Gemini returned invalid plan JSON; using offline reader")
         if text.strip():
             return PlanResult(extract_plan_numbers_offline(text), live=False)
@@ -365,10 +374,13 @@ class GeminiService:
         if text is None:
             return EobResult(self._fallback_eob(), live=False)
         try:
-            return EobResult(json.loads(text), live=True)
-        except json.JSONDecodeError:
+            data = json.loads(text)
+            if not isinstance(data, dict):
+                raise ValueError("expected a JSON object")
+        except ValueError:
             logger.exception("Gemini returned invalid EOB JSON; using sample analysis")
             return EobResult(self._fallback_eob(), live=False)
+        return EobResult(data, live=True)
 
     def _fallback_eob(self) -> dict:
         return {
