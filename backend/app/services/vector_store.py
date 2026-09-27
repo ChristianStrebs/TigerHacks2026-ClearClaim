@@ -13,10 +13,10 @@ which one is active.
 
 from __future__ import annotations
 
-import uuid
 import logging
-from threading import RLock
+import uuid
 from dataclasses import dataclass, field
+from threading import RLock
 from typing import Protocol
 
 import numpy as np
