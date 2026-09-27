@@ -94,6 +94,8 @@ def test_supabase_mode_requires_sign_in_but_health_stays_open(
         resp = client.get("/api/plan")
 
     assert health["supabase_enabled"] is True
+    assert health["supabase_url"] == PROJECT
+    assert health["supabase_publishable_key"] == "sb_publishable_test"
     assert health["storage"] == "supabase"
     assert resp.status_code == 401
     assert resp.json()["detail"] == SIGN_IN_DETAIL
