@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
+from functools import lru_cache
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import ValidationError
 
 from app.dependencies import AppServices, get_services, require_plan
+from app.routers.samples import SAMPLES_DIR
 from app.schemas import EobLineItem, EobScanResponse
 from app.services.gemini import GeminiUnavailableError
 
@@ -23,6 +26,27 @@ _ALLOWED_IMAGE_TYPES = {
 }
 _MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 _FULLY_COVERED_FLAG = "Your plan should cover this in full, so you shouldn't be charged."
+NOT_A_BILL_DETAIL = (
+    "This doesn't look like a medical bill or Explanation of Benefits. Try a photo or PDF "
+    "of the bill from your doctor, hospital, or insurer."
+)
+NO_CHARGES_DETAIL = (
+    "I couldn't find any charges on this file. Make sure the whole bill is in view and the "
+    "amounts are readable, then try again."
+)
+AI_DOWN_DETAIL = (
+    "I can't read your bill right now because the AI service is unavailable. Try again in "
+    "a moment, or tap Try sample bill to see how it works."
+)
+
+
+@lru_cache(maxsize=1)
+def _sample_bill_digest() -> str:
+    return hashlib.sha256((SAMPLES_DIR / "sample-bill.pdf").read_bytes()).hexdigest()
+
+
+def _is_sample_bill(data: bytes) -> bool:
+    return hashlib.sha256(data).hexdigest() == _sample_bill_digest()
 
 
 router = APIRouter(prefix="/api/eob", tags=["eob"])
@@ -87,10 +111,17 @@ async def scan_eob(
         mime_type=file.content_type or "image/png",
         policy_context=_policy_context(services),
     )
+    # The offline result describes the sample bill, so never pass it off as the member's own.
+    if not result.live and not _is_sample_bill(data):
+        raise HTTPException(status_code=503, detail=AI_DOWN_DETAIL)
+    if result.data.get("is_medical_bill") is False:
+        raise HTTPException(status_code=422, detail=NOT_A_BILL_DETAIL)
 
     raw_flags = result.data.get("overcharge_flags")
     flags = [str(f) for f in raw_flags if f] if isinstance(raw_flags, list) else []
     line_items = _parse_line_items(result.data.get("line_items"))
+    if not line_items:
+        raise HTTPException(status_code=422, detail=NO_CHARGES_DETAIL)
     flags += [
         f"{item.description} ({item.code}): {item.flag}"
         for item in line_items
