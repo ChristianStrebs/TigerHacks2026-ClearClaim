@@ -13,6 +13,7 @@ from app.services.benefits import (
     extract_dollar_amount,
     snapshot,
 )
+from app.services.bills import describe_scan, mentions_bill
 from app.services.gemini import GeminiUnavailableError
 from app.services.vector_store import SearchHit
 
@@ -58,8 +59,10 @@ def chat(
         f"Out-of-pocket max: ${benefits.oop_max:,.0f}."
     )
 
+    scan = services.latest_scan
     billed_amount = payload.billed_amount
-    if billed_amount is None:
+    # "Why was I charged $250 twice?" is about the scanned bill, not a procedure to estimate.
+    if billed_amount is None and not (scan and mentions_bill(payload.message)):
         billed_amount = extract_dollar_amount(payload.message)
     cost_estimate = (
         estimate_out_of_pocket(billed_amount, benefits) if billed_amount is not None else None
@@ -71,6 +74,7 @@ def chat(
         benefits_text,
         cost_note=cost_estimate.explanation if cost_estimate else None,
         history=payload.history,
+        bill=describe_scan(scan) if scan else None,
     )
 
     sources = [
@@ -83,5 +87,6 @@ def chat(
         sources=sources,
         benefits=benefits,
         cost_estimate=cost_estimate,
+        bill_scan_id=scan.scan_id if scan else None,
         demo_mode=not answer.live,
     )
