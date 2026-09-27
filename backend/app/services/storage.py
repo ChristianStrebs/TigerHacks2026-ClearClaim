@@ -67,6 +67,15 @@ class SavedTurn:
     response: ChatResponse
 
 
+@dataclass(frozen=True)
+class BillEntry:
+    """What one saved bill adds to the member's running totals."""
+
+    scan_id: str
+    file_sha256: str | None
+    you_owe: float
+
+
 class MemberStore(Protocol):
     """One member's data. Replacing or clearing the plan also drops its chunks, scans, and chats."""
 
@@ -87,6 +96,12 @@ class MemberStore(Protocol):
     def list_scans(self, limit: int = MAX_SAVED_SCANS) -> list[EobScanResponse]: ...
 
     def get_scan(self, scan_id: str) -> EobScanResponse | None: ...
+
+    def bill_ledger(self) -> list[BillEntry]:
+        """Every saved bill for the current plan, not just the most recent few."""
+        ...
+
+    def delete_scan(self, scan_id: str) -> None: ...
 
     def clear_scans(self) -> None: ...
 
@@ -125,7 +140,8 @@ class _MemberData:
     plan: SavedPlan | None = None
     chunks: list[Chunk] = field(default_factory=list)
     matrix: np.ndarray | None = None
-    scans: deque[EobScanResponse] = field(default_factory=lambda: deque(maxlen=MAX_SAVED_SCANS))
+    # Every bill counts toward the deductible, so only the listing is capped.
+    scans: list[EobScanResponse] = field(default_factory=list)
     chats: deque[SavedTurn] = field(default_factory=lambda: deque(maxlen=MAX_CHAT_HISTORY))
 
 
@@ -200,6 +216,14 @@ class InMemoryMemberStore:
     def get_scan(self, scan_id: str) -> EobScanResponse | None:
         with self._lock:
             return next((s for s in self._data.scans if s.scan_id == scan_id), None)
+
+    def bill_ledger(self) -> list[BillEntry]:
+        with self._lock:
+            return [BillEntry(s.scan_id, s.file_sha256, s.you_owe) for s in self._data.scans]
+
+    def delete_scan(self, scan_id: str) -> None:
+        with self._lock:
+            self._data.scans = [s for s in self._data.scans if s.scan_id != scan_id]
 
     def clear_scans(self) -> None:
         with self._lock:
@@ -368,6 +392,25 @@ class SupabaseMemberStore:
             "GET", "/bill_scans", params={"select": "result", "id": f"eq.{scan_id}", "limit": "1"}
         )
         return EobScanResponse.model_validate(rows[0]["result"]) if rows else None
+
+    def bill_ledger(self) -> list[BillEntry]:
+        rows = self._request(
+            "GET",
+            "/bill_scans",
+            params={"select": "id,you_owe:result->you_owe,file_sha256:result->>file_sha256"},
+        )
+        return [
+            BillEntry(
+                scan_id=str(r["id"]),
+                file_sha256=r.get("file_sha256"),
+                you_owe=float(r.get("you_owe") or 0),
+            )
+            for r in rows or []
+        ]
+
+    def delete_scan(self, scan_id: str) -> None:
+        if _is_uuid(scan_id):
+            self._request("DELETE", "/bill_scans", params={"id": f"eq.{scan_id}"})
 
     def clear_scans(self) -> None:
         self._request("DELETE", "/bill_scans", params={"user_id": f"eq.{self._member.id}"})
