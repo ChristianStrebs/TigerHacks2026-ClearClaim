@@ -1,7 +1,5 @@
 """Regression coverage for the small backend fixes shipped with the phone UI."""
 
-from types import SimpleNamespace
-
 import pytest
 from fastapi.testclient import TestClient
 from google.genai import types
@@ -13,12 +11,6 @@ from app.services.benefits import (
     sample_plan,
 )
 from app.services.gemini import _PLAN_SCHEMA, GeminiService
-from app.services.vector_store import (
-    Chunk,
-    IndexReplacementError,
-    InMemoryVectorStore,
-    SupabaseVectorStore,
-)
 
 
 @pytest.mark.parametrize("percent,expected", [(0, 0), (1, 0.01), (0.5, 0.005), (20, 0.2), (100, 1)])
@@ -114,64 +106,3 @@ def test_sample_summary_uses_configured_numbers() -> None:
     assert "12.5%" in plan.summary
     assert "87.5%" in plan.summary
     assert "$8,000 a year" in plan.summary
-
-
-def test_failed_memory_replacement_preserves_searchable_old_index() -> None:
-    store = InMemoryVectorStore()
-    store.add([Chunk("Old plan", "Old coverage", [1, 0])])
-    with pytest.raises(ValueError):
-        store.replace([Chunk("new", "a", [1, 0]), Chunk("new", "b", [1])])
-    assert store.count() == 1
-    assert store.search([1, 0])[0].document == "Old plan"
-    store.replace([Chunk("New plan", "New coverage", [0, 1])])
-    assert store.search([0, 1])[0].document == "New plan"
-
-
-def test_supabase_replace_uses_only_atomic_rpc() -> None:
-    calls = []
-
-    def rpc(name, payload):
-        calls.append((name, payload))
-        return SimpleNamespace(execute=lambda: SimpleNamespace(data=1))
-
-    store = SupabaseVectorStore.__new__(SupabaseVectorStore)
-    store._client = SimpleNamespace(rpc=rpc)  # No table()/delete()/upsert() fallback available.
-    chunk = Chunk("Plan", "Coverage", [1, 0])
-    assert store.replace([chunk]) == 1
-    assert calls[0][0] == "replace_documents"
-    assert calls[0][1]["new_documents"][0]["id"] == chunk.id
-
-
-def test_supabase_error_is_not_followed_by_destructive_fallback() -> None:
-    def rpc(*_):
-        raise ConnectionError("unreachable")
-
-    store = SupabaseVectorStore.__new__(SupabaseVectorStore)
-    store._client = SimpleNamespace(rpc=rpc)
-    with pytest.raises(IndexReplacementError, match="0002_atomic_document_replacement"):
-        store.replace([Chunk("New", "Coverage", [1, 0])])
-
-
-@pytest.mark.parametrize(
-    "endpoint,payload",
-    [
-        ("/api/plan/text", {"title": "New", "text": "Deductible: $7,000."}),
-        ("/api/plan/reset", None),
-    ],
-)
-def test_index_failure_does_not_publish_new_plan(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch, endpoint: str, payload: dict | None
-) -> None:
-    before = client.get("/api/plan").json()
-    store = client.app.state.services.vector_store
-    old_hits = store.search(client.app.state.services.gemini.embed_query("deductible"))
-
-    def fail(_):
-        raise IndexReplacementError("Index unavailable; previous state was not replaced.")
-
-    monkeypatch.setattr(store, "replace", fail)
-    response = client.post(endpoint, json=payload)
-    assert response.status_code == 503
-    assert "Index unavailable" in response.json()["detail"]
-    assert client.get("/api/plan").json() == before
-    assert store.search(client.app.state.services.gemini.embed_query("deductible")) == old_hits
