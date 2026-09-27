@@ -10,6 +10,17 @@ export const money = (value: number) =>
 export const demoMark = (benefits: BenefitsSnapshot, field: PlanField) =>
   benefits.demo_fields.includes(field) ? "*" : "";
 
+export const deductiblePercent = (benefits: BenefitsSnapshot) =>
+  benefits.deductible_total > 0
+    ? Math.min(
+        100,
+        Math.max(
+          0,
+          (benefits.deductible_met / benefits.deductible_total) * 100,
+        ),
+      )
+    : 0;
+
 export function DemoNote({ benefits }: { benefits: BenefitsSnapshot }) {
   if (!benefits.demo_fields.length) return null;
   return (
@@ -31,16 +42,7 @@ export function CoverageCard({
   onOpen: () => void;
   action?: string;
 }) {
-  const percent =
-    benefits && benefits.deductible_total > 0
-      ? Math.min(
-          100,
-          Math.max(
-            0,
-            (benefits.deductible_met / benefits.deductible_total) * 100,
-          ),
-        )
-      : 0;
+  const percent = benefits ? deductiblePercent(benefits) : 0;
   return (
     <section className="benefit-card">
       <div className="card-top">
