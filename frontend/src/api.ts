@@ -153,16 +153,8 @@ export const scanEob = (file: File) =>
     { method: "POST", body: uploadForm(file) },
     AI_TIMEOUT_MS,
   );
-export const sendChat = (
-  message: string,
-  history: ChatTurn[] = [],
-  billedAmount?: number,
-) =>
-  jsonPost<ChatResponse>("/api/chat", {
-    message,
-    history,
-    ...(billedAmount === undefined ? {} : { billed_amount: billedAmount }),
-  });
+export const sendChat = (message: string, history: ChatTurn[] = []) =>
+  jsonPost<ChatResponse>("/api/chat", { message, history });
 
 export async function downloadSample(sample: SampleFile): Promise<File> {
   // Construct the known backend route; never fetch an arbitrary response URL.
