@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, computed_field
@@ -101,6 +102,9 @@ class ChatResponse(BaseModel):
     sources: list[Source]
     benefits: BenefitsSnapshot
     cost_estimate: CostEstimate | None = None
+    bill_scan_id: str | None = Field(
+        default=None, description="The saved bill scan the answer could draw on, if any."
+    )
     demo_mode: bool
 
 
@@ -117,6 +121,10 @@ class EobLineItem(BaseModel):
 
 
 class EobScanResponse(BaseModel):
+    scan_id: str = Field(description="Use with GET /api/eob/scans/{scan_id}.")
+    file_name: str
+    scanned_at: datetime
+    plan_name: str = Field(description="The plan this bill was checked against.")
     provider: str | None = None
     total_billed: float
     line_items: list[EobLineItem]
