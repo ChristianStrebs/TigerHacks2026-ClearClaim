@@ -21,6 +21,22 @@ _COINSURANCE = re.compile(
     re.IGNORECASE,
 )
 
+_BENEFIT_TERMS = (
+    "deductible",
+    "coinsurance",
+    "copay",
+    "co-pay",
+    "out-of-pocket",
+    "out of pocket",
+    "premium",
+    "in-network",
+    "preventive",
+    "prior authorization",
+    "summary of benefits",
+    "health plan",
+    "insurance",
+)
+
 SAMPLE_PLAN_NAME = "ACME Corp Health Plan (2026)"
 
 _SAMPLE_SUMMARY = "\n".join(
@@ -141,11 +157,15 @@ def extract_plan_numbers_offline(text: str) -> dict:
         if coinsurance_match
         else None
     )
-    extracted = {
+    extracted: dict = {
         "deductible": dollars(_DEDUCTIBLE),
         "coinsurance_percent": coinsurance,
         "oop_max": dollars(_OOP_MAX),
     }
+    lowered = text.lower()
+    extracted["is_benefits_document"] = any(v is not None for v in extracted.values()) or (
+        sum(term in lowered for term in _BENEFIT_TERMS) >= 2
+    )
     found = [
         f"- **Deductible:** ${extracted['deductible']:,.0f}"
         if extracted["deductible"] is not None
