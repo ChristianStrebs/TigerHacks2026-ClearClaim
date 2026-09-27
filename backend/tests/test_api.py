@@ -5,11 +5,20 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from app.routers.eob import _parse_line_items, potential_savings
+from app.routers.eob import (
+    AI_DOWN_DETAIL,
+    NO_CHARGES_DETAIL,
+    NOT_A_BILL_DETAIL,
+    _parse_line_items,
+    potential_savings,
+)
+from app.routers.samples import SAMPLES_DIR
 from app.schemas import BenefitsSnapshot
 from app.services.benefits import estimate_out_of_pocket, extract_dollar_amount
 from app.services.gemini import EobResult
 from app.services.ingestion import chunk_text
+
+SAMPLE_BILL = SAMPLES_DIR / "sample-bill.pdf"
 
 
 def test_health_reports_demo_mode(client: TestClient) -> None:
@@ -61,8 +70,26 @@ def test_document_ingest_increases_index(client: TestClient) -> None:
     assert after > before
 
 
-def test_eob_scan_flags_overcharges(client: TestClient) -> None:
-    files = {"file": ("bill.png", b"\x89PNG\r\n\x1a\nfake", "image/png")}
+_BILL_REPLY = {
+    "is_medical_bill": True,
+    "provider": "Clinic",
+    "total_billed": 120,
+    "line_items": [
+        {"code": "99213", "description": "Office visit", "billed": 120,
+         "plan_expected": 25, "covered": True, "flag": ""},
+    ],
+    "overcharge_flags": [],
+    "summary": "A routine office visit.",
+}
+
+
+def _live_eob(monkeypatch: pytest.MonkeyPatch, client: TestClient, reply: dict) -> None:
+    gemini = client.app.state.services.gemini
+    monkeypatch.setattr(gemini, "analyze_eob", lambda **_: EobResult(reply, live=True))
+
+
+def test_offline_sample_bill_flags_overcharges(client: TestClient) -> None:
+    files = {"file": ("sample-bill.pdf", SAMPLE_BILL.read_bytes(), "application/pdf")}
     resp = client.post("/api/eob/scan", files=files)
     assert resp.status_code == 200
     body = resp.json()
@@ -70,15 +97,50 @@ def test_eob_scan_flags_overcharges(client: TestClient) -> None:
     assert body["total_billed"] > 0
     assert len(body["line_items"]) > 0
     assert len(body["overcharge_flags"]) > 0
-    # Sample bill: $45 preventive draw + $210 duplicate office visit.
+    # Sample bill: wellness visit, flu shot, and a duplicate visit the plan should cover.
     assert body["potential_savings"] == 565
 
 
-def test_eob_scan_accepts_iphone_heic_photos(client: TestClient) -> None:
+def test_offline_scan_of_own_bill_never_shows_sample_result(client: TestClient) -> None:
+    files = {"file": ("bill.png", b"\x89PNG\r\n\x1a\nreal bill", "image/png")}
+
+    resp = client.post("/api/eob/scan", files=files)
+
+    assert resp.status_code == 503
+    assert resp.json()["detail"] == AI_DOWN_DETAIL
+
+
+def test_eob_scan_accepts_iphone_heic_photos(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _live_eob(monkeypatch, client, _BILL_REPLY)
+
     resp = client.post("/api/eob/scan", files={"file": ("bill.heic", b"heic", "image/heic")})
 
     assert resp.status_code == 200
-    assert resp.json()["demo_mode"] is True
+    assert resp.json()["demo_mode"] is False
+
+
+def test_file_that_is_not_a_bill_is_rejected(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _live_eob(monkeypatch, client, {**_BILL_REPLY, "is_medical_bill": False, "line_items": []})
+
+    resp = client.post("/api/eob/scan", files={"file": ("recipe.png", b"img", "image/png")})
+
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == NOT_A_BILL_DETAIL
+
+
+def test_bill_with_no_readable_charges_is_rejected(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _live_eob(monkeypatch, client, {**_BILL_REPLY, "line_items": [], "total_billed": 0})
+
+    resp = client.post("/api/eob/scan", files={"file": ("blurry.png", b"img", "image/png")})
+
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == NO_CHARGES_DETAIL
 
 
 def test_auto_flagged_lines_appear_in_review_list(
