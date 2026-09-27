@@ -26,6 +26,11 @@ Because backend and mobile work live in different folders, these merges should n
   writes a plain-language summary. The uploaded plan becomes the active plan for chat and bill
   scans. Any number Gemini can't find stays at its demo value and is listed in
   `benefits.demo_fields` (see "Demo* label" below).
+- **Paste plan text.** `POST /api/plan/text` with `{"title": "...", "text": "..."}` does the same
+  as an upload for copied policy text. If no numbers are found, the summary says so and all
+  three numbers are listed in `demo_fields`.
+- **Plan numbers in health.** `GET /api/health` now includes `benefits`, so one call on app
+  launch can show the deductible bar and the "Gemini live" badge together.
 - **Read or reset the plan.** `GET /api/plan` returns the active plan. `POST /api/plan/reset`
   goes back to the bundled sample plan (ACME Corp Health Plan) — use it between demo visitors.
 - **Money at risk on bill scans.** `POST /api/eob/scan` now returns `potential_savings`: the total
@@ -74,9 +79,10 @@ Interactive docs with every schema: `http://<backend>/docs`.
 
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
-| GET | `/api/health` | — | `gemini_enabled`, `indexed_chunks`, models |
+| GET | `/api/health` | — | `gemini_enabled`, `indexed_chunks`, models, `benefits` |
 | GET | `/api/plan` | — | `PlanResponse` |
 | POST | `/api/plan/upload` | multipart `file` (PDF or photo) | `PlanResponse` |
+| POST | `/api/plan/text` | JSON `{"title": "...", "text": "..."}` | `PlanResponse` |
 | POST | `/api/plan/reset` | — | `PlanResponse` |
 | POST | `/api/chat` | JSON `{"message": "..."}` | `ChatResponse` |
 | POST | `/api/eob/scan` | multipart `file` (PDF or photo) | `EobScanResponse` |
