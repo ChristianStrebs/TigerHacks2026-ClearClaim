@@ -17,6 +17,16 @@ Because backend and mobile work live in different folders, these merges should n
 
 ---
 
+## [Unreleased] - 2026-09-27
+
+### Changed
+
+- README "Getting started" is written for someone running the repo for the first time:
+  clone steps, separate macOS/Linux and Windows commands, what works without a Gemini
+  key, and troubleshooting. Python 3.12+ is now listed because the pinned NumPy needs it.
+
+---
+
 ## `demo-ready` branch - 2026-09-27
 
 Merged into `main` on 2026-09-27.
