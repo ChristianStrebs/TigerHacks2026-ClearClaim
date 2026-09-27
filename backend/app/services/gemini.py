@@ -37,8 +37,8 @@ Extract the member's in-network, individual numbers:
 - coinsurance_percent: the member's share after the deductible, as a percent (20 means 20%)
 - oop_max: the annual out-of-pocket maximum in dollars
 Use null for any number the document does not state. Zero is a valid stated value,
-not a missing-value marker. coinsurance_percent is always a percentage: 1 means 1%,
-0.5 means 0.5%, and 100 means 100%. Never guess.
+not a missing-value marker. coinsurance_percent is a whole percentage: 20 means 20%,
+never 0.2. Never guess.
 Write `summary` as 4-6 short bullet strings in plain language (8th-grade reading level):
 deductible, coinsurance, out-of-pocket max, free preventive care, common copays, and the
 biggest watch-outs such as prior authorization. Financial and administrative only; no
@@ -308,6 +308,11 @@ class GeminiService:
         if raw is not None:
             try:
                 data = json.loads(raw)
+                percent = data.get("coinsurance_percent")
+                # Models sometimes answer 0.3 for 30%; real plans never have sub-1% coinsurance.
+                if isinstance(percent, int | float) and not isinstance(percent, bool):
+                    if 0 < percent < 1:
+                        data["coinsurance_percent"] = percent * 100
                 points = data.get("summary") or []
                 if isinstance(points, list):
                     data["summary"] = "\n".join(f"- {str(p).lstrip('-• ').strip()}" for p in points)
