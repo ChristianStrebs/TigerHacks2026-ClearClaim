@@ -3,6 +3,7 @@ import type {
   ChatHistoryItem,
   ChatResponse,
   ChatTurn,
+  DisputeKit,
   EobScanResponse,
   HealthResponse,
   PlanResponse,
@@ -148,6 +149,8 @@ export const deleteScan = (scanId: string) =>
     READ_TIMEOUT_MS,
     async () => undefined,
   );
+export const getDisputeKit = (scanId: string) =>
+  jsonPost<DisputeKit>(`/api/eob/scans/${encodeURIComponent(scanId)}/dispute`);
 export const getChatHistory = () =>
   request<ChatHistoryItem[]>("/api/chat/history");
 export const submitPlanText = (title: string, text: string) =>
