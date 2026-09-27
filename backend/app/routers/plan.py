@@ -23,6 +23,10 @@ _PDF = "application/pdf"
 _IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"}
 _MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 _AI_UNREACHABLE = "The AI service is unreachable right now. Please try again in a moment."
+NOT_BENEFITS_DETAIL = (
+    "This doesn't look like a health insurance benefits document. Try your Summary of "
+    "Benefits and Coverage, your plan booklet, or a photo of your benefits page."
+)
 
 
 def _apply_extracted_plan(
@@ -32,6 +36,9 @@ def _apply_extracted_plan(
     extracted: dict,
     summary_live: bool,
 ) -> PlanResponse:
+    """Replace the active plan, or raise and leave the current plan untouched."""
+    if extracted.get("is_benefits_document") is False:
+        raise HTTPException(status_code=422, detail=NOT_BENEFITS_DETAIL)
     if not document_text.strip():
         raise HTTPException(
             status_code=422,
