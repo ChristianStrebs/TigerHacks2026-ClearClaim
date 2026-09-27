@@ -68,15 +68,19 @@ export interface EobScanResponse {
 }
 
 export interface HealthResponse {
-  benefits: BenefitsSnapshot | null;
   status: string;
   version: string;
   gemini_enabled: boolean;
+  /** True when visitors sign in and their data is saved in Supabase. */
   supabase_enabled: boolean;
-  vector_store: string;
+  storage: "in-memory" | "supabase";
   chat_model: string;
   embed_model: string;
-  indexed_chunks: number;
+}
+
+export interface ChatHistoryItem {
+  question: string;
+  response: ChatResponse;
 }
 
 export interface SampleFile {
