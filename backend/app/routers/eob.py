@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import math
 import uuid
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -14,7 +15,7 @@ from pydantic import ValidationError
 
 from app.dependencies import AppServices, get_services, member_store, require_plan
 from app.routers.samples import SAMPLES_DIR
-from app.schemas import EobLineItem, EobScanResponse
+from app.schemas import MAX_NAME_CHARS, EobLineItem, EobScanResponse
 from app.services.indexing import search_plan
 from app.services.storage import MemberStore, PlanReplacedError, SavedPlan
 
@@ -68,12 +69,31 @@ def _policy_context(services: AppServices, store: MemberStore, plan: SavedPlan) 
     return "\n\n".join(hit.text for hit in hits)
 
 
+def _money(value: object) -> float | None:
+    """Read 180, "180", or "$1,180.50" as dollars; None when it isn't a finite amount."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, str):
+        value = value.strip().lstrip("$").replace(",", "")
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        return None
+    return amount if math.isfinite(amount) else None
+
+
 def _parse_line_items(raw_items: object) -> list[EobLineItem]:
     """Keep every well-formed line item; skip malformed ones instead of failing the scan."""
     if not isinstance(raw_items, list):
         return []
     items: list[EobLineItem] = []
     for raw in raw_items:
+        if isinstance(raw, dict):
+            raw = {
+                **raw,
+                "billed": _money(raw.get("billed")),
+                "plan_expected": _money(raw.get("plan_expected")),
+            }
         try:
             item = EobLineItem.model_validate(raw)
         except ValidationError:
@@ -146,13 +166,16 @@ def _review_bill(
         for item in line_items
         if item.flag == _FULLY_COVERED_FLAG
     ]
+    total_billed = _money(result.data.get("total_billed"))
+    if not total_billed:
+        total_billed = round(sum(item.billed for item in line_items), 2)
     scan = EobScanResponse(
         scan_id=str(uuid.uuid4()),
-        file_name=file_name,
+        file_name=file_name[:MAX_NAME_CHARS],
         scanned_at=datetime.now(UTC),
         plan_name=plan.profile.name,
-        provider=result.data.get("provider") or None,
-        total_billed=float(result.data.get("total_billed") or 0.0),
+        provider=str(result.data.get("provider") or "")[:MAX_NAME_CHARS] or None,
+        total_billed=total_billed,
         line_items=line_items,
         overcharge_flags=flags,
         potential_savings=potential_savings(line_items),
