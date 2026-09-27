@@ -74,7 +74,7 @@ class BillEntry:
 
     scan_id: str
     file_sha256: str | None
-    you_owe: float
+    applied_to_deductible: float
 
 
 class MemberStore(Protocol):
@@ -220,7 +220,10 @@ class InMemoryMemberStore:
 
     def bill_ledger(self) -> list[BillEntry]:
         with self._lock:
-            return [BillEntry(s.scan_id, s.file_sha256, s.you_owe) for s in self._data.scans]
+            return [
+                BillEntry(s.scan_id, s.file_sha256, s.applied_to_deductible)
+                for s in self._data.scans
+            ]
 
     def delete_scan(self, scan_id: str) -> None:
         with self._lock:
@@ -417,13 +420,16 @@ class SupabaseMemberStore:
         rows = self._request(
             "GET",
             "/bill_scans",
-            params={"select": "id,you_owe:result->you_owe,file_sha256:result->>file_sha256"},
+            params={
+                "select": "id,applied:result->applied_to_deductible,"
+                "file_sha256:result->>file_sha256"
+            },
         )
         return [
             BillEntry(
                 scan_id=str(r["id"]),
                 file_sha256=r.get("file_sha256"),
-                you_owe=float(r.get("you_owe") or 0),
+                applied_to_deductible=float(r.get("applied") or 0),
             )
             for r in rows or []
         ]
