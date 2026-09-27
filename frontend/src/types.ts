@@ -34,6 +34,17 @@ export interface CostEstimate {
   explanation: string;
 }
 
+export type AgentTool =
+  "search_plan" | "get_bill" | "estimate_cost" | "check_rights";
+
+export interface AgentStep {
+  tool: AgentTool;
+  /** What the AI did, like "Searched your plan for 'MRI'". */
+  label: string;
+  /** A short summary of what the tool found. */
+  result: string;
+}
+
 export interface ChatResponse {
   answer: string;
   sources: Source[];
@@ -41,6 +52,8 @@ export interface ChatResponse {
   cost_estimate: CostEstimate | null;
   /** The saved bill scan the answer could draw on, if any. */
   bill_scan_id: string | null;
+  /** Tools the AI used, in order; empty when it answered without them. */
+  steps: AgentStep[];
   demo_mode: boolean;
 }
 
