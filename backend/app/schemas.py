@@ -253,6 +253,16 @@ class EobScanResponse(BaseModel):
     demo_mode: bool
 
 
+class DisputeKit(BaseModel):
+    """What the member needs to challenge a bill: a letter, a call script, and next steps."""
+
+    letter: str = Field(description="Ready to send once [bracketed] placeholders are filled in.")
+    call_script: list[str] = Field(description="What to say to the billing office, in order.")
+    checklist: list[str] = Field(description="Steps to take, in order.")
+    deadline_note: str = Field(description="How soon to act.")
+    demo_mode: bool = Field(description="True when written from a template instead of by Gemini.")
+
+
 class SampleFile(BaseModel):
     name: str
     kind: Literal["bill", "benefits"]
