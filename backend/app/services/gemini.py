@@ -165,6 +165,12 @@ class GeminiService:
     def enabled(self) -> bool:
         return self._client is not None
 
+    @property
+    def embedding_space(self) -> str:
+        """Names the vectors this service produces; different spaces can't be compared."""
+        model = self._settings.gemini_embed_model if self.enabled else "offline"
+        return f"{model}:{self._settings.embed_dim}"
+
     def disable(self, reason: str) -> None:
         """Permanently switch to demo mode (used when startup indexing fails)."""
         logger.error("Disabling Gemini, falling back to demo mode: %s", reason)
