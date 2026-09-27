@@ -212,19 +212,19 @@ def test_supabase_skips_lookups_for_malformed_scan_ids() -> None:
 
 def test_supabase_bill_ledger_reads_only_the_totals() -> None:
     rows = [
-        {"id": "a", "you_owe": 125.5, "file_sha256": "abc"},
-        {"id": "b", "you_owe": None, "file_sha256": None},
+        {"id": "a", "applied": 125.5, "file_sha256": "abc"},
+        {"id": "b", "applied": None, "file_sha256": None},
     ]
     storage, requests = _supabase(lambda _: httpx.Response(200, json=rows))
 
     ledger = storage.for_member(ALICE).bill_ledger()
 
-    assert [(e.scan_id, e.file_sha256, e.you_owe) for e in ledger] == [
+    assert [(e.scan_id, e.file_sha256, e.applied_to_deductible) for e in ledger] == [
         ("a", "abc", 125.5),
         ("b", None, 0.0),
     ]
     select = requests[0].url.params["select"]
-    assert "result->you_owe" in select
+    assert "applied:result->applied_to_deductible" in select
     assert "limit" not in requests[0].url.params
 
 
@@ -244,10 +244,11 @@ def test_in_memory_ledger_keeps_bills_past_the_listing_cap() -> None:
     store = InMemoryStorage().for_member(ALICE)
     saved = store.replace_plan(PLAN, [Chunk("Plan", "Coverage", [1.0])], "offline:1")
     for i in range(8):
-        store.add_scan(saved.id, _scan().model_copy(update={"scan_id": str(i), "you_owe": 10}))
+        scan = _scan().model_copy(update={"scan_id": str(i), "applied_to_deductible": 10})
+        store.add_scan(saved.id, scan)
 
     assert len(store.list_scans()) == 5
-    assert sum(e.you_owe for e in store.bill_ledger()) == 80
+    assert sum(e.applied_to_deductible for e in store.bill_ledger()) == 80
     store.delete_scan("3")
     assert [e.scan_id for e in store.bill_ledger()] == ["0", "1", "2", "4", "5", "6", "7"]
 
