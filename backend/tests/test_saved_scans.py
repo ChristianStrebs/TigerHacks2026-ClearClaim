@@ -155,6 +155,37 @@ def test_bills_fill_the_deductible_up_to_the_limit(client: TestClient, live_bill
     assert benefits["deductible_remaining"] == 0
 
 
+def _fill_then_coinsurance(client: TestClient, bills: dict) -> tuple[dict, dict]:
+    # $1,550 of deductible is left: $1,550 + 20% of the other $50 = $1,560.
+    big = _scan(client, bills, "surgery", _bill("Hospital", (1600, None)))
+    # The deductible is met, so the member only owes 20% coinsurance.
+    follow_up = _scan(client, bills, "follow-up", _bill("Hospital", (1000, None)))
+    assert (big["you_owe"], big["applied_to_deductible"]) == (1560, 1550)
+    assert (follow_up["you_owe"], follow_up["applied_to_deductible"]) == (200, 0)
+    return big, follow_up
+
+
+def test_coinsurance_never_counts_toward_the_deductible(
+    client: TestClient, live_bills: dict
+) -> None:
+    big, _ = _fill_then_coinsurance(client, live_bills)
+
+    client.delete(f"/api/eob/scans/{big['scan_id']}")
+
+    assert _benefits(client)["deductible_met"] == _MET
+
+
+def test_rescan_is_not_discounted_by_another_bills_coinsurance(
+    client: TestClient, live_bills: dict
+) -> None:
+    _fill_then_coinsurance(client, live_bills)
+
+    again = _scan(client, live_bills, "surgery", _bill("Hospital", (1600, None)))
+
+    assert (again["you_owe"], again["applied_to_deductible"]) == (1560, 1550)
+    assert _benefits(client)["deductible_met"] == _DEDUCTIBLE
+
+
 def test_scanner_is_told_the_deductible_left_before_the_bill(
     client: TestClient, live_bills: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
