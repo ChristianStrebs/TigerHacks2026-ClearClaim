@@ -69,6 +69,11 @@ member should personally pay for that line under the plan summary provided.
 - Use the member's deductible status: the member pays charges in full until the remaining
   deductible is used up (unless the plan says a copay applies instead), then coinsurance.
   Work through the lines in order and carry the remaining deductible from line to line.
+- Surprise-billing protection (emergency care, air ambulance, or an out-of-network provider
+  at an in-network facility) removes only the out-of-network balance. The member still owes
+  in-network cost sharing, never 0 just because the balance is protected. If the file shows
+  no in-network or allowed amount, apply the deductible and coinsurance to the billed amount
+  exactly as for an in-network charge. Flag the out-of-network balance.
 - Set flag to one short plain-language reason on EVERY line where the member is charged more
   than plan_expected because of a duplicate, an upcode, or coverage the plan owes. Use an
   empty string only when the charge is correct.
@@ -385,76 +390,17 @@ class GeminiService:
                 response_schema=_EOB_SCHEMA,
             ),
         )
+        # Without a live reading, the caller decides what to do (e.g. a sample's saved one).
         if text is None:
-            return EobResult(self._fallback_eob(), live=False)
+            return EobResult({}, live=False)
         try:
             data = json.loads(text)
             if not isinstance(data, dict):
                 raise ValueError("expected a JSON object")
         except ValueError:
-            logger.exception("Gemini returned invalid EOB JSON; using sample analysis")
-            return EobResult(self._fallback_eob(), live=False)
+            logger.exception("Gemini returned invalid EOB JSON")
+            return EobResult({}, live=False)
         return EobResult(data, live=True)
-
-    def _fallback_eob(self) -> dict:
-        in_network_checkup = {
-            "network": "in",
-            "facility_in_network": None,
-            "emergency": False,
-            "preventive": True,
-            "provider_type": "primary_care",
-        }
-        return {
-            "provider": "Mizzou Health Partners (sample)",
-            "total_billed": 565.00,
-            "line_items": [
-                {
-                    "code": "99396",
-                    "description": "Preventive visit, established, age 40-64",
-                    "billed": 250.00,
-                    "plan_expected": 0.00,
-                    "covered": True,
-                    "flag": "Annual wellness visit — preventive care is $0 under your plan.",
-                    **in_network_checkup,
-                },
-                {
-                    "code": "90686",
-                    "description": "Flu vaccine, preservative free",
-                    "billed": 40.00,
-                    "plan_expected": 0.00,
-                    "covered": True,
-                    "flag": "Routine vaccine — covered at 100% under your plan.",
-                    **in_network_checkup,
-                },
-                {
-                    "code": "90471",
-                    "description": "Vaccine administration",
-                    "billed": 25.00,
-                    "plan_expected": 0.00,
-                    "covered": True,
-                    "flag": "Giving the vaccine is part of preventive care — should be $0.",
-                    **in_network_checkup,
-                },
-                {
-                    "code": "99396",
-                    "description": "Preventive visit (duplicate charge)",
-                    "billed": 250.00,
-                    "plan_expected": 0.00,
-                    "covered": False,
-                    "flag": "Exact duplicate of line 1 on the same date.",
-                    **in_network_checkup,
-                },
-            ],
-            "overcharge_flags": [
-                "Lines 1-3: a wellness visit and flu shot are preventive care, which your "
-                "plan covers at 100%.",
-                "Line 4: the wellness visit (99396) is billed twice on the same date.",
-            ],
-            "summary": (
-                "Sample analysis: you were billed $565 for a wellness visit and flu shot "
-                "that your plan covers in full, including a duplicate visit charge."
-            ),
-        }
 
 
 # JSON schema handed to Gemini for structured EOB extraction.
