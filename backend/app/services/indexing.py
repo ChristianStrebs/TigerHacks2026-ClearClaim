@@ -10,7 +10,7 @@ from app.services.vector_store import Chunk
 
 
 def load_sample_policy() -> str:
-    return resources.files("app.data").joinpath("sample_policy.txt").read_text()
+    return resources.files("app.data").joinpath("sample_policy.txt").read_text(encoding="utf-8")
 
 
 def embed_document(services: AppServices, title: str, text: str) -> list[Chunk]:
