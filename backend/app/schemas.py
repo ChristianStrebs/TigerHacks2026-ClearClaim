@@ -1,5 +1,7 @@
 """Pydantic request/response models shared across routers."""
 
+from __future__ import annotations
+
 from typing import Literal
 
 from pydantic import BaseModel, Field, computed_field
@@ -16,6 +18,7 @@ class HealthResponse(BaseModel):
     chat_model: str
     embed_model: str
     indexed_chunks: int
+    benefits: BenefitsSnapshot
 
 
 class DocumentIngestRequest(BaseModel):
@@ -45,6 +48,11 @@ class BenefitsSnapshot(BaseModel):
         default_factory=list,
         description="Numbers still using demo values because they weren't found in a plan.",
     )
+
+
+class PlanTextRequest(BaseModel):
+    title: str = Field(default="Pasted policy", min_length=1)
+    text: str = Field(..., min_length=1, description="Raw policy text to read and index.")
 
 
 class PlanResponse(BaseModel):
