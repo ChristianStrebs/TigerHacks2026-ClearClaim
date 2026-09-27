@@ -35,14 +35,15 @@ Without keys, everything still works with labeled offline answers and in-memory 
 | `backend/.env` | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | Saved data per visitor. Empty means one in-memory member. |
 | `backend/.env` | `CORS_ORIGINS` | Browser origins allowed to call the API. |
 | `frontend/.env.local` | `VITE_API_BASE_URL` | Backend URL. Empty means same-origin `/api`, proxied by Vite. |
-| `frontend/.env.local` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | Must match the backend's Supabase settings. |
 
-Only publishable keys go in the frontend. Never commit `.env` files.
+The backend is the only place Supabase is configured. `GET /api/health` returns
+`supabase_url` and `supabase_publishable_key` (both public), and clients create their
+Supabase client from those. Never commit `.env` files.
 
 ## Sessions
 
-When Supabase is on, each visitor signs in anonymously with the Supabase client (no
-login screen). Send the access token on every call except `/api/health` and
+When Supabase is on, each visitor signs in anonymously with a Supabase client built from
+the `/api/health` values (no login screen). Send the access token on every call except `/api/health` and
 `/api/samples`:
 
 ~~~
