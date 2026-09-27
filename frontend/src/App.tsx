@@ -871,6 +871,51 @@ export default function App() {
                             Savings are not guaranteed.
                           </p>
                         </section>
+                        {review.rights.length > 0 && (
+                          <section
+                            className="rights-section"
+                            aria-labelledby="rights-heading"
+                          >
+                            <h2 className="section-label" id="rights-heading">
+                              <Icon name="shield" size={18} /> Your rights
+                            </h2>
+                            {review.rights.map((right) => (
+                              <article
+                                className="rights-card"
+                                key={right.rule_id}
+                              >
+                                <h3>{right.title}</h3>
+                                <p>{right.explanation}</p>
+                                {right.lines.length > 0 && (
+                                  <p className="rights-lines">
+                                    Applies to {right.lines.join(", ")}
+                                  </p>
+                                )}
+                                <dl>
+                                  <div>
+                                    <dt>You should owe</dt>
+                                    <dd>{right.you_should_owe}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>What to do</dt>
+                                    <dd>{right.action}</dd>
+                                  </div>
+                                </dl>
+                                <a
+                                  href={right.citation_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  Source: {right.source_name}
+                                </a>
+                              </article>
+                            ))}
+                            <p className="rights-note">
+                              General information about patient protections, not
+                              legal advice. Your plan or state rules may differ.
+                            </p>
+                          </section>
+                        )}
                         <div className="white-card">
                           <small>{review.provider ?? "Your bill"}</small>
                           <div className="total-line">
