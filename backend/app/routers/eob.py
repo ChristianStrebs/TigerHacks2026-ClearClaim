@@ -19,6 +19,7 @@ from app.schemas import MAX_NAME_CHARS, EobLineItem, EobScanResponse
 from app.services.benefits import snapshot
 from app.services.bills import member_cost
 from app.services.indexing import search_plan
+from app.services.rights import check_rights
 from app.services.storage import MemberStore, PlanReplacedError, SavedPlan
 from app.services.uploads import UNREADABLE_FILE_DETAIL, matches_type
 
@@ -155,8 +156,10 @@ def _review_bill(
     # Scanning the same file again replaces the earlier copy rather than counting it twice.
     ledger = store.bill_ledger()
     replaced = [entry.scan_id for entry in ledger if entry.file_sha256 == digest]
-    owed_before = sum(entry.you_owe for entry in ledger if entry.file_sha256 != digest)
-    benefits = snapshot(plan.profile, owed_before)
+    paid_before = sum(
+        entry.applied_to_deductible for entry in ledger if entry.file_sha256 != digest
+    )
+    benefits = snapshot(plan.profile, paid_before)
 
     result = services.gemini.analyze_eob(
         image_bytes=data,
@@ -202,6 +205,7 @@ def _review_bill(
         you_owe=you_owe,
         applied_to_deductible=round(min(you_owe, benefits.deductible_remaining), 2),
         file_sha256=digest,
+        rights=check_rights(line_items),
         summary=str(result.data.get("summary") or ""),
         demo_mode=not result.live,
     )
