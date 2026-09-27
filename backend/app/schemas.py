@@ -67,6 +67,13 @@ class HealthResponse(BaseModel):
     version: str
     gemini_enabled: bool
     supabase_enabled: bool = Field(description="True when members sign in and data is saved.")
+    supabase_url: str | None = Field(
+        default=None, description="Project URL the web app signs in with; null without Supabase."
+    )
+    supabase_publishable_key: str | None = Field(
+        default=None,
+        description="The project's public key. Safe to share: row level security guards data.",
+    )
     storage: Literal["in-memory", "supabase"]
     chat_model: str
     embed_model: str
