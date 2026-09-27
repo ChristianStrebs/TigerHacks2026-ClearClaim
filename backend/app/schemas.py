@@ -14,25 +14,10 @@ class HealthResponse(BaseModel):
     status: str
     version: str
     gemini_enabled: bool
-    supabase_enabled: bool
-    vector_store: str
+    supabase_enabled: bool = Field(description="True when members sign in and data is saved.")
+    storage: Literal["in-memory", "supabase"]
     chat_model: str
     embed_model: str
-    indexed_chunks: int
-    benefits: BenefitsSnapshot | None = Field(
-        description="Null until the member picks the sample plan or submits their own."
-    )
-
-
-class DocumentIngestRequest(BaseModel):
-    title: str = Field(..., description="Human-readable document name.")
-    text: str = Field(..., description="Raw policy text to chunk, embed, and index.")
-
-
-class DocumentIngestResponse(BaseModel):
-    title: str
-    chunks_indexed: int
-    total_chunks: int
 
 
 class Source(BaseModel):
@@ -106,6 +91,11 @@ class ChatResponse(BaseModel):
         default=None, description="The saved bill scan the answer could draw on, if any."
     )
     demo_mode: bool
+
+
+class ChatHistoryItem(BaseModel):
+    question: str
+    response: ChatResponse
 
 
 class EobLineItem(BaseModel):
