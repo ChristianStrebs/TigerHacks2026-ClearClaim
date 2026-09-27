@@ -13,7 +13,7 @@ from app.services.benefits import (
     extract_dollar_amount,
     snapshot,
 )
-from app.services.bills import bills_owed, describe_scans, mentions_bill
+from app.services.bills import deductible_from_bills, describe_scans, mentions_bill
 from app.services.indexing import search_plan
 from app.services.storage import MemberStore, PlanReplacedError
 
@@ -39,7 +39,7 @@ def chat(
     )
 
     context = "\n\n".join(f"[{hit.document}] {hit.text}" for hit in hits)
-    benefits = snapshot(plan, bills_owed(store))
+    benefits = snapshot(plan, deductible_from_bills(store))
     plan_note = (
         "This is a sample demo plan; the member has not submitted their own benefits yet."
         if plan.source == "demo"
