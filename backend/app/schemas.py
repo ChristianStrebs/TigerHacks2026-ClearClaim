@@ -256,6 +256,7 @@ class EobScanResponse(BaseModel):
 class SampleFile(BaseModel):
     name: str
     kind: Literal["bill", "benefits"]
+    label: str = Field(description="Short name to show on a button or menu.")
     description: str
 
     @computed_field
