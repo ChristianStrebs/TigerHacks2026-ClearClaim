@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 
 from app.dependencies import AppServices, get_services
 from app.schemas import PlanResponse, PlanTextRequest
@@ -56,7 +57,7 @@ def _apply_extracted_plan(
         raise HTTPException(status_code=503, detail=_AI_UNREACHABLE) from exc
     except IndexReplacementError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    services.plan = plan
+    services.set_plan(plan)
     return plan_response(plan)
 
 
@@ -99,6 +100,15 @@ async def upload_plan(
     if len(data) > _MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="File is too large (15 MB max).")
 
+    # PDF parsing, Gemini, and embedding calls block, so keep them off the event loop.
+    return await run_in_threadpool(
+        _read_uploaded_plan, services, data, mime_type, file.filename or "Your plan"
+    )
+
+
+def _read_uploaded_plan(
+    services: AppServices, data: bytes, mime_type: str, file_name: str
+) -> PlanResponse:
     text = ""
     if mime_type == _PDF:
         try:
@@ -110,7 +120,7 @@ async def upload_plan(
     extraction = services.gemini.extract_plan(text=text, file_bytes=data, mime_type=mime_type)
     return _apply_extracted_plan(
         services,
-        fallback_name=file.filename or "Your plan",
+        fallback_name=file_name,
         document_text=text or str(extraction.data.get("full_text") or ""),
         extracted=extraction.data,
         summary_live=extraction.live,
@@ -127,7 +137,7 @@ def use_sample_plan(services: AppServices = Depends(get_services)) -> PlanRespon
         raise HTTPException(status_code=503, detail=_AI_UNREACHABLE) from exc
     except IndexReplacementError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    services.plan = sample_plan(services.settings)
+    services.set_plan(sample_plan(services.settings))
     return plan_response(services.plan)
 
 
@@ -135,5 +145,5 @@ def use_sample_plan(services: AppServices = Depends(get_services)) -> PlanRespon
 def clear_plan(services: AppServices = Depends(get_services)) -> PlanResponse:
     """Start over: forget the active plan so the app asks the member to choose again."""
     services.vector_store.clear()
-    services.plan = None
+    services.set_plan(None)
     return plan_response(None)
