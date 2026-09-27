@@ -208,6 +208,19 @@ class EobLineItem(BaseModel):
         return _yes_no(value)
 
 
+class RightsFinding(BaseModel):
+    """A patient protection that may apply to some of a bill's charges."""
+
+    rule_id: str
+    title: str
+    explanation: str
+    you_should_owe: str
+    action: str = Field(description="What the member can do about it.")
+    lines: list[str] = Field(description="The charges it applies to, as 'description (code)'.")
+    source_name: str
+    citation_url: str
+
+
 class EobScanResponse(BaseModel):
     scan_id: str = Field(description="Use with GET /api/eob/scans/{scan_id}.")
     file_name: str
@@ -232,6 +245,9 @@ class EobScanResponse(BaseModel):
     file_sha256: str | None = Field(
         default=None,
         description="Fingerprint of the uploaded file; scanning the same file replaces this scan.",
+    )
+    rights: list[RightsFinding] = Field(
+        default_factory=list, description="Patient protections that may apply to this bill."
     )
     summary: str
     demo_mode: bool
