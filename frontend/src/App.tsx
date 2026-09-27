@@ -752,14 +752,14 @@ export default function App() {
                         disabled={!available}
                         onClick={() => void scanBill(undefined, sample)}
                       >
-                        Try sample bill
+                        Try sample: {sample.label}
                       </button>
                     ))}
                     {sampleError && <p className="muted">{sampleError}</p>}
                     <p className="demo-callout">
                       <Icon name="info" size={18} />
                       Bills are reviewed by AI. If AI is unavailable, only the
-                      sample bill can be reviewed, and it's clearly labeled.
+                      sample bills can be reviewed, and they're clearly labeled.
                     </p>
                     {scanError && (
                       <p className="error" role="alert">
@@ -1221,7 +1221,7 @@ export default function App() {
                             <option value="">Choose sample benefits</option>
                             {planSamples.map((sample) => (
                               <option key={sample.name} value={sample.name}>
-                                {sample.name}
+                                {sample.label}
                               </option>
                             ))}
                           </select>
