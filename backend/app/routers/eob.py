@@ -7,14 +7,13 @@ import logging
 import math
 import uuid
 from datetime import UTC, datetime
-from functools import lru_cache
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from pydantic import ValidationError
 
 from app.dependencies import AppServices, get_services, member_store, require_plan
-from app.routers.samples import SAMPLES_DIR
+from app.routers.samples import offline_bill_analysis
 from app.schemas import MAX_NAME_CHARS, EobLineItem, EobScanResponse
 from app.services.benefits import snapshot
 from app.services.bills import member_cost
@@ -46,18 +45,8 @@ NO_CHARGES_DETAIL = (
 SCAN_GONE_DETAIL = "That bill scan isn't saved anymore."
 AI_DOWN_DETAIL = (
     "I can't read your bill right now because the AI service is unavailable. Try again in "
-    "a moment, or tap Try sample bill to see how it works."
+    "a moment, or try one of the sample bills to see how it works."
 )
-
-
-@lru_cache(maxsize=1)
-def _sample_bill_digest() -> str:
-    return hashlib.sha256((SAMPLES_DIR / "sample-bill.pdf").read_bytes()).hexdigest()
-
-
-def _is_sample_bill(digest: str) -> bool:
-    return digest == _sample_bill_digest()
-
 
 router = APIRouter(prefix="/api/eob", tags=["eob"])
 
@@ -171,15 +160,15 @@ def _review_bill(
             f"Coinsurance after the deductible: {benefits.coinsurance_rate * 100:g}%."
         ),
     )
-    # The offline result describes the sample bill, so never pass it off as the member's own.
-    if not result.live and not _is_sample_bill(digest):
+    reading = result.data if result.live else offline_bill_analysis(digest)
+    if reading is None:
         raise HTTPException(status_code=503, detail=AI_DOWN_DETAIL)
-    if result.data.get("is_medical_bill") is False:
+    if reading.get("is_medical_bill") is False:
         raise HTTPException(status_code=422, detail=NOT_A_BILL_DETAIL)
 
-    raw_flags = result.data.get("overcharge_flags")
+    raw_flags = reading.get("overcharge_flags")
     flags = [str(f) for f in raw_flags if f] if isinstance(raw_flags, list) else []
-    line_items = _parse_line_items(result.data.get("line_items"))
+    line_items = _parse_line_items(reading.get("line_items"))
     if not line_items:
         raise HTTPException(status_code=422, detail=NO_CHARGES_DETAIL)
     flags += [
@@ -187,7 +176,7 @@ def _review_bill(
         for item in line_items
         if item.flag == _FULLY_COVERED_FLAG
     ]
-    total_billed = _money(result.data.get("total_billed"))
+    total_billed = _money(reading.get("total_billed"))
     if not total_billed:
         total_billed = round(sum(item.billed for item in line_items), 2)
     you_owe = member_cost(line_items, benefits)
@@ -197,7 +186,7 @@ def _review_bill(
         file_name=file_name[:MAX_NAME_CHARS],
         scanned_at=datetime.now(UTC),
         plan_name=plan.profile.name,
-        provider=str(result.data.get("provider") or "")[:MAX_NAME_CHARS] or None,
+        provider=str(reading.get("provider") or "")[:MAX_NAME_CHARS] or None,
         total_billed=total_billed,
         line_items=line_items,
         overcharge_flags=flags,
@@ -206,7 +195,7 @@ def _review_bill(
         applied_to_deductible=round(min(you_owe, benefits.deductible_remaining), 2),
         file_sha256=digest,
         rights=check_rights(line_items),
-        summary=str(result.data.get("summary") or ""),
+        summary=str(reading.get("summary") or ""),
         demo_mode=not result.live,
     )
     try:
