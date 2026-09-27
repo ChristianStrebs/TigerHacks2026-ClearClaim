@@ -1,0 +1,65 @@
+[
+  {
+    "id": "preventive_care",
+    "title": "Preventive care should cost you nothing in-network",
+    "explanation": "Most health plans must cover preventive services, like wellness visits, screenings, and immunizations, at no cost when you see an in-network provider, even before you meet your deductible. Coverage can vary, so $0 isn't guaranteed in every case.",
+    "you_should_owe": "Usually $0: no copay or coinsurance.",
+    "action": "Ask the billing office to reprocess the visit as preventive care. If your insurer applied cost sharing, ask them to review the claim.",
+    "source_name": "HealthCare.gov: Preventive health services",
+    "citation_url": "https://www.healthcare.gov/coverage/preventive-care-benefits/"
+  },
+  {
+    "id": "nsa_emergency",
+    "title": "Emergency care is protected from surprise bills",
+    "explanation": "Under the No Surprises Act, emergency care can't be billed at out-of-network rates. Even if the emergency room or doctor is out of network, you should only owe your plan's in-network cost sharing.",
+    "you_should_owe": "Your plan's in-network copay, coinsurance, or deductible, not the out-of-network balance.",
+    "action": "Tell the provider the charge is for emergency care protected by the No Surprises Act and ask them to bill only your in-network cost sharing.",
+    "source_name": "CMS: Know your medical bill rights",
+    "citation_url": "https://www.cms.gov/medical-bill-rights/know-your-rights"
+  },
+  {
+    "id": "nsa_ancillary",
+    "title": "Out-of-network specialists at an in-network facility can't surprise bill you",
+    "explanation": "At an in-network hospital, hospital outpatient department, or surgery center, out-of-network anesthesia, radiology, pathology, lab, emergency medicine, neonatology, assistant surgeon, hospitalist, and intensivist services can't be balance billed. You can't be asked to waive this protection.",
+    "you_should_owe": "Your plan's in-network cost sharing, the same as if the provider were in network.",
+    "action": "Tell the provider the service was at an in-network facility and is protected by the No Surprises Act. Ask them to remove the out-of-network balance.",
+    "source_name": "CMS: Overview of key No Surprises Act protections",
+    "citation_url": "https://www.cms.gov/files/document/nsa-keyprotections.pdf"
+  },
+  {
+    "id": "nsa_air_ambulance",
+    "title": "Air ambulance bills are protected",
+    "explanation": "Under the No Surprises Act, an out-of-network air ambulance provider can't bill you more than your plan's in-network cost sharing.",
+    "you_should_owe": "Your plan's in-network cost sharing.",
+    "action": "Tell the air ambulance company the bill is protected by the No Surprises Act and ask for a corrected bill.",
+    "source_name": "CMS: Know your medical bill rights",
+    "citation_url": "https://www.cms.gov/medical-bill-rights/know-your-rights"
+  },
+  {
+    "id": "ground_ambulance",
+    "title": "Ground ambulance isn't covered by the surprise billing law",
+    "explanation": "Ground ambulance services generally aren't protected by the No Surprises Act unless your state has its own law, so an out-of-network ground ambulance may be allowed to charge more.",
+    "you_should_owe": "Possibly more than in-network cost sharing, depending on your state.",
+    "action": "Ask your insurer to review the claim, check whether your state protects ground ambulance bills, and ask the company about a payment plan or discount.",
+    "source_name": "CMS: Know your medical bill rights",
+    "citation_url": "https://www.cms.gov/medical-bill-rights/know-your-rights"
+  },
+  {
+    "id": "duplicate_charge",
+    "title": "You shouldn't pay twice for the same service",
+    "explanation": "Being charged more than once for the same service on the same day is a common billing error. Compare the bill with your Explanation of Benefits and ask for an itemized list of charges.",
+    "you_should_owe": "Nothing for the repeated charge.",
+    "action": "Call the billing office, ask for an itemized bill, and ask them to remove the duplicate charge.",
+    "source_name": "Consumer Financial Protection Bureau: Checking a medical bill",
+    "citation_url": "https://www.consumerfinance.gov/ask-cfpb/what-should-i-do-if-i-cant-pay-a-medical-bill-en-2125/"
+  },
+  {
+    "id": "appeal_right",
+    "title": "You can appeal a denied or underpaid claim",
+    "explanation": "If your insurer denies or won't fully pay for care you believe is covered, you can file an internal appeal within 180 days of the denial notice. If they still deny it, you can ask for an independent external review.",
+    "you_should_owe": "Depends on the appeal outcome.",
+    "action": "Write to your insurer with your name, claim number, and member ID, explain why the service should be covered, and keep copies of everything.",
+    "source_name": "HealthCare.gov: Internal appeals",
+    "citation_url": "https://www.healthcare.gov/appeal-insurance-company-decision/internal-appeals/"
+  }
+]
