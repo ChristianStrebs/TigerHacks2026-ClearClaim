@@ -90,6 +90,11 @@ async def scan_eob(
     raw_flags = result.data.get("overcharge_flags")
     flags = [str(f) for f in raw_flags if f] if isinstance(raw_flags, list) else []
     line_items = _parse_line_items(result.data.get("line_items"))
+    flags += [
+        f"{item.description} ({item.code}): {item.flag}"
+        for item in line_items
+        if item.flag == _FULLY_COVERED_FLAG
+    ]
     return EobScanResponse(
         provider=result.data.get("provider") or None,
         total_billed=float(result.data.get("total_billed") or 0.0),

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.routers.eob import _parse_line_items, potential_savings
 from app.schemas import BenefitsSnapshot
 from app.services.benefits import estimate_out_of_pocket, extract_dollar_amount
+from app.services.gemini import EobResult
 from app.services.ingestion import chunk_text
 
 
@@ -78,6 +80,33 @@ def test_eob_scan_accepts_iphone_heic_photos(client: TestClient) -> None:
 
     assert resp.status_code == 200
     assert resp.json()["demo_mode"] is True
+
+
+def test_auto_flagged_lines_appear_in_review_list(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    services = client.app.state.services
+    reply = {
+        "total_billed": 290,
+        "line_items": [
+            {"code": "99396", "description": "Wellness visit", "billed": 250,
+             "plan_expected": 0, "covered": True, "flag": ""},
+            {"code": "99396", "description": "Wellness visit", "billed": 250,
+             "plan_expected": 0, "covered": False, "flag": "Duplicate of line 1."},
+        ],
+        "overcharge_flags": ["Line 2 is a duplicate."],
+        "summary": "",
+    }
+    monkeypatch.setattr(
+        services.gemini, "analyze_eob", lambda **_: EobResult(reply, live=True)
+    )
+
+    body = client.post(
+        "/api/eob/scan", files={"file": ("bill.png", b"img", "image/png")}
+    ).json()
+
+    assert len(body["overcharge_flags"]) == 2
+    assert "Wellness visit (99396)" in body["overcharge_flags"][1]
 
 
 def test_fully_covered_lines_are_flagged_as_money_at_risk() -> None:
