@@ -8,6 +8,8 @@ import re
 from pypdf import PdfReader
 
 _WHITESPACE = re.compile(r"\s+")
+# Long unbroken runs (pasted URLs, base64, gibberish) would make chunks too large to embed or save.
+_MAX_WORD_CHARS = 25
 
 
 def clean_text(text: str) -> str:
@@ -39,8 +41,12 @@ def chunk_text(
     if overlap < 0 or overlap >= chunk_size:
         raise ValueError("overlap must be in [0, chunk_size)")
 
-    words = clean_text(text).split(" ")
-    if not words or words == [""]:
+    words = [
+        word[i : i + _MAX_WORD_CHARS]
+        for word in clean_text(text).split(" ")
+        for i in range(0, len(word), _MAX_WORD_CHARS)
+    ]
+    if not words:
         return []
 
     chunks: list[str] = []
