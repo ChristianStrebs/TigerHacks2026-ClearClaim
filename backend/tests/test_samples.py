@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
+
 from fastapi.testclient import TestClient
+
+from app.routers.samples import SAMPLES, SAMPLES_DIR, offline_bill_analysis
 
 
 def test_lists_sample_files_with_download_urls(client: TestClient) -> None:
@@ -28,6 +32,40 @@ def test_sample_bill_scans_to_money_at_risk(client: TestClient) -> None:
 
     assert scan.status_code == 200
     assert scan.json()["potential_savings"] == 565
+
+
+def test_surprise_bill_scans_to_a_no_surprises_act_protection(client: TestClient) -> None:
+    pdf = client.get("/api/samples/surprise-bill.pdf").content
+
+    scan = client.post(
+        "/api/eob/scan", files={"file": ("surprise-bill.pdf", pdf, "application/pdf")}
+    ).json()
+
+    assert scan["demo_mode"] is True
+    assert scan["total_billed"] == 2700
+    # The sample plan's $1,550 remaining deductible, then 20% of the other $1,150.
+    assert scan["you_owe"] == 1780
+    assert scan["potential_savings"] == 920
+    assert [finding["rule_id"] for finding in scan["rights"]] == ["nsa_ancillary"]
+    assert scan["rights"][0]["lines"] == [
+        "Anesthesia for knee joint surgery (01400)",
+        "Femoral nerve block injection (64447)",
+    ]
+
+
+def test_each_sample_bill_has_its_own_saved_analysis() -> None:
+    bills = [name for name, sample in SAMPLES.items() if sample.kind == "bill"]
+    providers = set()
+    for name in bills:
+        digest = hashlib.sha256((SAMPLES_DIR / name).read_bytes()).hexdigest()
+        analysis = offline_bill_analysis(digest)
+        assert analysis is not None, name
+        providers.add(analysis["provider"])
+    assert len(providers) == len(bills)
+
+
+def test_other_files_have_no_saved_analysis() -> None:
+    assert offline_bill_analysis(hashlib.sha256(b"my own bill").hexdigest()) is None
 
 
 def test_sample_benefits_upload_reads_plan_numbers(client: TestClient) -> None:

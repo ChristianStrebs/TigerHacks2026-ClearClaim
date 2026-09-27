@@ -134,6 +134,8 @@ export interface ChatHistoryItem {
 export interface SampleFile {
   name: string;
   kind: "bill" | "benefits";
+  /** Short name to show on a button or menu. */
+  label: string;
   description: string;
   url: string;
 }
