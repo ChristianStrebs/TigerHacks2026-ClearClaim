@@ -107,6 +107,10 @@ Not yet merged into `main`.
   answers the previous single-shot way, which it still does when the AI is off, when every
   model fails, or when tools run past 4 rounds. A tool-using answer takes 2 or more Gemini
   requests, so the free tier's daily limit runs out sooner.
+- **Web app: "How I answered".** Chat answers that used tools show a collapsible "How I
+  answered · N steps" list under the answer, with an icon, what the AI did, and what it
+  found for each step. When the calculator ran, a note says costs come from ClearClaim's
+  calculator, not the AI. Answers without tools look the same as before.
 - **Optional hosting configs.** `render.yaml` (backend on Render) and `frontend/vercel.json`
   (frontend on Vercel), with steps in the README's "Deploy (optional)" section. The app
   still runs fully locally without them.
