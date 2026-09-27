@@ -3,6 +3,7 @@ import {
   ApiError,
   chooseSamplePlan,
   clearPlan,
+  deleteScan,
   downloadSample,
   getChatHistory,
   getHealth,
@@ -21,6 +22,7 @@ import { ChoosePlan } from "./components/ChoosePlan";
 import {
   CoverageCard,
   DemoNote,
+  deductiblePercent,
   demoMark,
   money,
 } from "./components/CoverageCard";
@@ -36,8 +38,8 @@ import type {
 } from "./types";
 
 type Tab = "home" | "chat" | "scan" | "plan";
-type Pending = "chat" | "scan" | "plan" | null;
-type Sheet = "upload" | "clear" | null;
+type Pending = "chat" | "scan" | "remove" | "plan" | null;
+type Sheet = "upload" | "clear" | "remove" | null;
 type PlanAction = "upload" | "text" | "sample-file" | "sample-plan" | "clear";
 interface Turn {
   question: string;
@@ -51,6 +53,8 @@ const SUGGESTIONS = [
   "Is my annual wellness visit covered?",
   "What do I pay for generic prescriptions?",
 ];
+// Matches MAX_SAVED_SCANS in backend/app/services/storage.py.
+const MAX_LISTED_BILLS = 5;
 const BILL_SUGGESTIONS = [
   "Which charges on my bill should I question?",
   "Why was I charged twice?",
@@ -71,6 +75,49 @@ function planNotice(source: PlanSource): string {
     }
   }
 }
+function pendingStatus(kind: Exclude<Pending, null>): string {
+  switch (kind) {
+    case "chat":
+      return "Checking your plan… AI requests may take a minute or more.";
+    case "scan":
+      return "Reviewing the bill… AI requests may take a minute or more.";
+    case "remove":
+      return "Removing the bill…";
+    case "plan":
+      return "Updating your plan… AI requests may take a minute or more.";
+    default: {
+      const unhandled: never = kind;
+      return unhandled;
+    }
+  }
+}
+function sheetTitle(sheet: Sheet): string {
+  switch (sheet) {
+    case "clear":
+      return "Start over?";
+    case "remove":
+      return "Remove this bill?";
+    case "upload":
+    case null:
+      return "Add your plan";
+    default: {
+      const unhandled: never = sheet;
+      return unhandled;
+    }
+  }
+}
+// Scanned bills move deductible progress; only a different plan should count as a change.
+const planIdentity = (plan: PlanResponse) =>
+  JSON.stringify({
+    ...plan,
+    benefits: plan.benefits && {
+      ...plan.benefits,
+      deductible_met: 0,
+      deductible_remaining: 0,
+    },
+  });
+const shortDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 const errorMessage = (error: unknown) =>
   error instanceof Error
     ? error.message
@@ -91,6 +138,7 @@ export default function App() {
   const [pending, setPending] = useState<Pending>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [question, setQuestion] = useState("");
+  const [scans, setScans] = useState<EobScanResponse[]>([]);
   const [review, setReview] = useState<EobScanResponse | null>(null);
   const [scanError, setScanError] = useState("");
   const [sheet, setSheet] = useState<Sheet>(null);
@@ -134,9 +182,10 @@ export default function App() {
       errors.push(errorMessage(h.reason));
     }
     if (p.status === "fulfilled") {
-      const signature = JSON.stringify(p.value);
+      const signature = planIdentity(p.value);
       if (planSignature.current && signature !== planSignature.current) {
         setTurns([]);
+        setScans([]);
         setReview(null);
         setNotice(
           "Your plan was changed in another tab. Previous results have been cleared.",
@@ -163,7 +212,10 @@ export default function App() {
       );
     }
     // The backend drops scans and chats when the plan changes, so what it returns is current.
-    if (saved.status === "fulfilled") setReview(saved.value[0] ?? null);
+    if (saved.status === "fulfilled") {
+      setScans(saved.value);
+      setReview(saved.value[0] ?? null);
+    }
     if (history.status === "fulfilled")
       setTurns(
         history.value.map(({ question, response }) => ({ question, response })),
@@ -217,11 +269,12 @@ export default function App() {
     setSheet("upload");
   }
   function acceptPlan(next: PlanResponse, nextTab: Tab) {
-    planSignature.current = JSON.stringify(next);
+    planSignature.current = planIdentity(next);
     setPlan(next);
     setBenefits(next.benefits);
     // Results from the previous plan must not appear to describe the replacement.
     setTurns([]);
+    setScans([]);
     setReview(null);
     setScanError("");
     setTitle("");
@@ -304,18 +357,66 @@ export default function App() {
       finish();
     }
   }
+  async function reloadBenefits() {
+    try {
+      const next = await getPlan();
+      planSignature.current = planIdentity(next);
+      setPlan(next);
+      setBenefits(next.benefits);
+    } catch {
+      // The coverage card catches up on the next refresh.
+    }
+  }
   async function scanBill(file?: File, sample?: SampleFile) {
     if (!available || !begin("scan")) return;
     // A rejected file doesn't replace the saved review the chat still uses.
     const previous = review;
     setScanError("");
+    setNotice("");
     setReview(null);
     try {
       const selected = file ?? (sample ? await downloadSample(sample) : null);
       if (!selected) throw new Error("Choose a bill to review.");
-      setReview(await scanEob(selected));
+      const scan = await scanEob(selected);
+      // The backend replaces an earlier scan of the same file.
+      setScans((old) =>
+        [
+          scan,
+          ...old.filter(
+            (s) =>
+              s.scan_id !== scan.scan_id &&
+              (!scan.file_sha256 || s.file_sha256 !== scan.file_sha256),
+          ),
+        ].slice(0, MAX_LISTED_BILLS),
+      );
+      setReview(scan);
+      if (scan.applied_to_deductible > 0)
+        setNotice(
+          `Your bill added ${money(scan.applied_to_deductible)} to your deductible.`,
+        );
+      await reloadBenefits();
     } catch (error) {
       setReview(previous);
+      setScanError(errorMessage(error));
+    } finally {
+      finish();
+    }
+  }
+  async function removeBill() {
+    if (!review || !begin("remove")) return;
+    setScanError("");
+    setNotice("");
+    try {
+      await deleteScan(review.scan_id).catch((error: unknown) => {
+        if (!(error instanceof ApiError && error.status === 404)) throw error;
+      });
+      const rest = await getScans();
+      setScans(rest);
+      setReview(rest[0] ?? null);
+      setSheet(null);
+      await reloadBenefits();
+    } catch (error) {
+      setSheet(null);
       setScanError(errorMessage(error));
     } finally {
       finish();
@@ -419,12 +520,7 @@ export default function App() {
           )}
           {pending && (
             <div className="operation-status" role="status">
-              {pending === "chat"
-                ? "Checking your plan…"
-                : pending === "scan"
-                  ? "Reviewing the bill…"
-                  : "Updating your plan…"}{" "}
-              AI requests may take a minute or more.
+              {pendingStatus(pending)}
             </div>
           )}
           <main className={`phone-content ${tab}`} ref={scroll}>
@@ -511,11 +607,12 @@ export default function App() {
                       ? `Using ${plan?.plan_name}`
                       : "Choose a plan to start asking questions."}
                   </p>
-                  {hasPlan && review && (
+                  {hasPlan && scans.length > 0 && (
                     <p className="bill-context">
                       <Icon name="scan" size={16} />
-                      Also using your bill from{" "}
-                      {review.provider ?? review.file_name}
+                      {scans.length > 1
+                        ? `Also using your ${scans.length} saved bills`
+                        : `Also using your bill from ${scans[0].provider ?? scans[0].file_name}`}
                     </p>
                   )}
                 </div>
@@ -669,6 +766,42 @@ export default function App() {
                         {scanError}
                       </p>
                     )}
+                    {scans.length > 1 && (
+                      <section aria-label="Your saved bills">
+                        <div className="section-heading">
+                          <h2>Your bills</h2>
+                          <span className="mode">{scans.length} saved</span>
+                        </div>
+                        <div className="bill-list">
+                          {scans.map((scan) => (
+                            <button
+                              key={scan.scan_id}
+                              className="bill-row"
+                              aria-pressed={review?.scan_id === scan.scan_id}
+                              disabled={busy}
+                              onClick={() => {
+                                setScanError("");
+                                setReview(scan);
+                              }}
+                            >
+                              <span className="bill-row-icon">
+                                <Icon name="scan" size={18} />
+                              </span>
+                              <span className="bill-row-text">
+                                <strong>
+                                  {scan.provider ?? scan.file_name}
+                                </strong>
+                                <small>
+                                  {shortDate(scan.scanned_at)} · You pay{" "}
+                                  {money(scan.you_owe)}
+                                </small>
+                              </span>
+                              <Icon name="chevron" size={16} />
+                            </button>
+                          ))}
+                        </div>
+                      </section>
+                    )}
                     {review && (
                       <div className="scan-results" aria-live="polite">
                         <div className="section-heading">
@@ -685,6 +818,48 @@ export default function App() {
                             sample bill.
                           </p>
                         )}
+                        <section className="price-card">
+                          <span>
+                            YOUR TOTAL PRICE
+                            {review.demo_mode ? " · SAMPLE" : ""}
+                          </span>
+                          <strong>{money(review.you_owe)}</strong>
+                          <p>
+                            Your share under your plan
+                            {review.potential_savings > 0
+                              ? ", once flagged charges are fixed"
+                              : ""}
+                            . The bill asks for {money(review.total_billed)}.
+                          </p>
+                          {benefits && (
+                            <div className="price-deductible">
+                              <div
+                                className="price-meter"
+                                role="progressbar"
+                                aria-label="Deductible met"
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                                aria-valuenow={deductiblePercent(benefits)}
+                              >
+                                <i
+                                  style={{
+                                    width: `${deductiblePercent(benefits)}%`,
+                                  }}
+                                />
+                              </div>
+                              <small>
+                                {review.applied_to_deductible > 0 && (
+                                  <b className="deductible-bump">
+                                    +{money(review.applied_to_deductible)}
+                                  </b>
+                                )}
+                                Deductible: {money(benefits.deductible_met)} of{" "}
+                                {money(benefits.deductible_total)}
+                                {demoMark(benefits, "deductible_total")} met
+                              </small>
+                            </div>
+                          )}
+                        </section>
                         <section className="savings-card">
                           <span>
                             POTENTIAL SAVINGS
@@ -756,6 +931,13 @@ export default function App() {
                           onClick={() => setTab("chat")}
                         >
                           <Icon name="chat" size={17} /> Ask about this bill
+                        </button>
+                        <button
+                          className="secondary full sample-button"
+                          disabled={busy}
+                          onClick={() => setSheet("remove")}
+                        >
+                          Remove this bill
                         </button>
                       </div>
                     )}
@@ -867,8 +1049,9 @@ export default function App() {
                   {privateData
                     ? "Your plan, bill scans, and chats are saved privately for this browser."
                     : "One shared plan for this server. Choosing a plan or starting over changes it for everyone."}{" "}
-                  Uploaded plans start with $0 deductible met; this app does not
-                  track paid claims.
+                  Uploaded plans start with $0 deductible met. What you owe on
+                  scanned bills counts toward it; remove a bill to take it back
+                  out.
                 </p>
               </div>
             )}
@@ -930,29 +1113,40 @@ export default function App() {
           <dialog
             ref={dialog}
             onCancel={(event) => {
-              if (pending === "plan") event.preventDefault();
+              if (pending === "plan" || pending === "remove")
+                event.preventDefault();
               else setSheet(null);
             }}
             className="policy-dialog"
           >
             <div className="section-heading">
-              <h2>{sheet === "clear" ? "Start over?" : "Add your plan"}</h2>
+              <h2>{sheetTitle(sheet)}</h2>
               <button
                 type="button"
                 className="icon-button"
-                disabled={pending === "plan"}
-                aria-label="Close plan form"
+                disabled={pending === "plan" || pending === "remove"}
+                aria-label="Close"
                 onClick={() => setSheet(null)}
               >
                 <Icon name="close" />
               </button>
             </div>
             <p className="shared-warning">
-              {sheet === "clear"
-                ? `This removes ${privateData ? "your" : "the shared"} plan, bill scans, and chats, then returns to the welcome screen.`
-                : `This replaces ${privateData ? "your" : "the shared"} plan and clears previous chats and bill scans.`}
+              {sheet === "remove"
+                ? `${review?.provider ?? review?.file_name ?? "This bill"} will be deleted${review && review.you_owe > 0 ? ", and what you owe on it will stop counting toward your deductible" : ""}.`
+                : sheet === "clear"
+                  ? `This removes ${privateData ? "your" : "the shared"} plan, bill scans, and chats, then returns to the welcome screen.`
+                  : `This replaces ${privateData ? "your" : "the shared"} plan and clears previous chats and bill scans.`}
             </p>
-            {sheet === "clear" ? (
+            {sheet === "remove" ? (
+              <button
+                className="primary full"
+                disabled={busy}
+                onClick={() => void removeBill()}
+              >
+                Yes, remove it
+              </button>
+            ) : sheet === "clear" ? (
               <button
                 className="primary full"
                 disabled={busy}
