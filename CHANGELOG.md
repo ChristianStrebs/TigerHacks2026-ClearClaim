@@ -93,6 +93,11 @@ Not yet merged into `main`.
   placeholders. Surprise bills also point to the No Surprises Help Desk (1-800-985-3059).
   Nothing is saved; the kit is written fresh each time. Returns `404` for an unknown scan
   and `409` before a plan is chosen.
+- **Web app: "Fix this bill".** Bills with flagged charges or a protection show a "Fix this
+  bill" button. It opens a sheet with Letter and Call script tabs, Copy, Download .txt, and
+  an Email link that opens the letter in your mail app. The checklist can be ticked off, and
+  a note says it's general information, not legal advice. It shows whether Gemini or the
+  template wrote the kit.
 - **Optional hosting configs.** `render.yaml` (backend on Render) and `frontend/vercel.json`
   (frontend on Vercel), with steps in the README's "Deploy (optional)" section. The app
   still runs fully locally without them.
