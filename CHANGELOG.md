@@ -60,6 +60,26 @@ Not yet merged into `main`.
 
 - `/api/documents` and the old shared index migrations (`0001_init.sql`,
   `0002_atomic_document_replacement.sql`).
+- The optional procedure cost field in the web chat. The backend still accepts
+  `billed_amount`, and it also reads a dollar amount from the question itself.
+
+### Fixed
+
+- Blank questions and questions over 4,000 characters now get `422` right away. Before,
+  a long question was answered and then failed to save.
+- Pasted plan text is trimmed and limited to 200,000 characters. Titles are limited to 300.
+- Files whose contents don't match their type (a text file renamed `.pdf`, a damaged PDF)
+  get `400` with a plain message instead of "the AI service is unavailable".
+- Scanned PDFs whose text layer is only page numbers are now read as images.
+- Long plan booklets no longer fail: embeddings are sent in batches of 100, and long
+  unbroken text is split so it fits the database.
+- Bill amounts written as `"$1,180.50"` are read correctly, and a missing total falls back
+  to the sum of the line items instead of crashing.
+- Session tokens allow 30 seconds of clock difference. When a token is rejected, the web
+  app renews the same anonymous session instead of starting a new one, so saved data isn't
+  lost.
+- A rejected bill scan no longer hides the previous saved review in the web app.
+- Answers render `*italics*`, `* ` bullets, and `#` headings instead of showing symbols.
 
 ---
 
