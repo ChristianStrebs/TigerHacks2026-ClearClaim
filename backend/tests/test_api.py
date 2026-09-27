@@ -29,6 +29,8 @@ def test_health_reports_demo_mode(client: TestClient) -> None:
     assert body["status"] == "ok"
     assert body["gemini_enabled"] is False
     assert body["supabase_enabled"] is False
+    assert body["supabase_url"] is None
+    assert body["supabase_publishable_key"] is None
     assert body["storage"] == "in-memory"
 
 
