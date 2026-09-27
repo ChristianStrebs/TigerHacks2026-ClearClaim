@@ -8,7 +8,13 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from app.config import Settings
-from app.schemas import BenefitsSnapshot, CostEstimate, PlanField, PlanResponse
+from app.schemas import (
+    MAX_NAME_CHARS,
+    BenefitsSnapshot,
+    CostEstimate,
+    PlanField,
+    PlanResponse,
+)
 
 _DOLLAR_AMOUNT = re.compile(r"\$\s?(\d[\d,]*(?:\.\d{1,2})?)\s*(k\b)?", re.IGNORECASE)
 _DEDUCTIBLE = re.compile(r"deductible[^$\n]{0,60}?\$\s?(\d[\d,]*)", re.IGNORECASE)
@@ -131,8 +137,9 @@ def plan_from_extraction(
         oop_max = settings.demo_oop_max
         demo_fields.append("oop_max")
 
+    name = str(extracted.get("plan_name") or "").strip() or fallback_name
     return PlanProfile(
-        name=str(extracted.get("plan_name") or "").strip() or fallback_name,
+        name=name[:MAX_NAME_CHARS].strip(),
         source="document",
         deductible_total=deductible,
         deductible_met=0.0,
