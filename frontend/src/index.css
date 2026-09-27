@@ -1417,6 +1417,90 @@ button:active {
   color: #9a8d98;
   margin: 6px 0 14px;
 }
+.fix-bill-button {
+  margin: 4px 0 16px;
+}
+.dispute-dialog {
+  width: min(420px, calc(100vw - 24px));
+}
+.dispute-tabs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.dispute-tabs .upload-tabs {
+  flex: 1;
+  margin: 0;
+}
+.dispute-text {
+  margin: 12px 0 0;
+  padding: 14px;
+  max-height: 38vh;
+  overflow: auto;
+  background: #faf8fa;
+  border: 1px solid #eee7ec;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #514550;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.call-script {
+  display: grid;
+  gap: 8px;
+  padding-left: 32px;
+}
+.dispute-actions {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+.dispute-actions > * {
+  flex: 1;
+  padding: 11px 8px;
+  font-size: 12px;
+  text-decoration: none;
+}
+.dispute-checklist-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 16px 0 8px;
+  font-size: 14px;
+}
+.dispute-checklist-head small {
+  font-size: 11px;
+  color: #9a8d98;
+}
+.dispute-checklist {
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  padding: 0;
+  margin: 0;
+}
+.dispute-checklist label {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  background: #faf8fa;
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.dispute-checklist input {
+  margin-top: 2px;
+  accent-color: #3f7461;
+  flex-shrink: 0;
+}
+.dispute-checklist input:checked + span {
+  color: #9a8d98;
+  text-decoration: line-through;
+}
 .price-card {
   padding: 20px;
   background: #f3f0fc;
