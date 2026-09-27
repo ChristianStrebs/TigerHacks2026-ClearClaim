@@ -1354,6 +1354,69 @@ button:active {
   line-height: 1.6;
   color: #aa6a79;
 }
+.rights-section h2 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #3f7461;
+}
+.rights-card {
+  padding: 18px;
+  background: #eef7f3;
+  border: 1px solid #d5ebe1;
+  border-radius: 19px;
+  margin: 9px 0;
+  color: #35604f;
+}
+.rights-card h3 {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.rights-card p {
+  font-size: 12px;
+  line-height: 1.6;
+  margin-top: 8px;
+  color: #56796b;
+}
+.rights-card .rights-lines {
+  font-weight: 650;
+  color: #3f7461;
+  overflow-wrap: anywhere;
+}
+.rights-card dl {
+  display: grid;
+  gap: 10px;
+  margin: 13px 0;
+  padding: 13px;
+  background: #fff;
+  border-radius: 13px;
+}
+.rights-card dt {
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #7d9a8e;
+}
+.rights-card dd {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #35604f;
+}
+.rights-card a {
+  font-size: 12px;
+  font-weight: 650;
+  color: #2f7a5f;
+  overflow-wrap: anywhere;
+}
+.rights-note {
+  font-size: 11px;
+  line-height: 1.5;
+  color: #9a8d98;
+  margin: 6px 0 14px;
+}
 .price-card {
   padding: 20px;
   background: #f3f0fc;
