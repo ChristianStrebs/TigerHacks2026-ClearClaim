@@ -44,7 +44,10 @@ deductible, coinsurance, out-of-pocket max, free preventive care, common copays,
 biggest watch-outs such as prior authorization. Financial and administrative only; no
 medical advice.
 If the input is an image or a scanned document, put a faithful plain-text transcription of
-every benefit detail in `full_text`; otherwise use an empty string."""
+every benefit detail in `full_text`; otherwise use an empty string.
+Set is_benefits_document to false when the input is not a health insurance benefits
+document (for example a recipe, receipt, resume, medical bill, or random photo); then use
+null for every number and an empty summary."""
 
 _UNREADABLE_PHOTO_SUMMARY = (
     "I couldn't read this photo right now because the AI service is unavailable. "
@@ -427,6 +430,7 @@ _EOB_SCHEMA = {
 _PLAN_SCHEMA = {
     "type": "object",
     "properties": {
+        "is_benefits_document": {"type": "boolean"},
         "plan_name": {"type": "string"},
         "deductible": {"type": "number", "nullable": True},
         "coinsurance_percent": {"type": "number", "nullable": True},
@@ -434,5 +438,12 @@ _PLAN_SCHEMA = {
         "summary": {"type": "array", "items": {"type": "string"}},
         "full_text": {"type": "string"},
     },
-    "required": ["deductible", "coinsurance_percent", "oop_max", "summary", "full_text"],
+    "required": [
+        "is_benefits_document",
+        "deductible",
+        "coinsurance_percent",
+        "oop_max",
+        "summary",
+        "full_text",
+    ],
 }
