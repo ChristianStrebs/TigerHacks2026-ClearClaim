@@ -81,6 +81,10 @@ Not yet merged into `main`.
   lines still carry in-network cost sharing, never $0.
   Each sample in `GET /api/samples` now has a `label` for buttons and menus. The web app
   shows one "Try sample" button per sample bill.
+- **Web app: "Your rights" on each bill.** When a scan finds a protection, the review shows
+  a "Your rights" card after the savings: what the protection is, which charges it covers,
+  what you should owe, what to do, and a link to the official source. A note says it's
+  general information, not legal advice.
 - **Optional hosting configs.** `render.yaml` (backend on Render) and `frontend/vercel.json`
   (frontend on Vercel), with steps in the README's "Deploy (optional)" section. The app
   still runs fully locally without them.
