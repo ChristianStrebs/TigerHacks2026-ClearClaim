@@ -3,11 +3,58 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 PlanField = Literal["deductible_total", "coinsurance_rate", "oop_max"]
+Network = Literal["in", "out", "unknown"]
+ProviderType = Literal[
+    "facility",
+    "primary_care",
+    "specialist",
+    "surgeon",
+    "emergency_medicine",
+    "anesthesiology",
+    "radiology",
+    "pathology",
+    "laboratory",
+    "neonatology",
+    "assistant_surgeon",
+    "hospitalist",
+    "intensivist",
+    "air_ambulance",
+    "ground_ambulance",
+    "pharmacy",
+    "other",
+]
+_PROVIDER_ALIASES = {
+    "anesthesia": "anesthesiology",
+    "anesthesiologist": "anesthesiology",
+    "radiologist": "radiology",
+    "pathologist": "pathology",
+    "lab": "laboratory",
+    "hospital": "facility",
+    "emergency": "emergency_medicine",
+    "ambulance": "ground_ambulance",
+}
+
+
+def _token(value: object) -> str:
+    """Lowercase snake case, so "In-Network" reads as "in_network"."""
+    return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def _yes_no(value: object) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    text = _token(value)
+    if text in {"true", "yes", "y", "1"}:
+        return True
+    if text in {"false", "no", "n", "0"}:
+        return False
+    return None
+
 
 # Match the column limits in supabase/migrations so valid requests always save.
 MAX_NAME_CHARS = 300
@@ -124,6 +171,41 @@ class EobLineItem(BaseModel):
         default=None,
         description="Populated when the line item looks incorrect or overcharged.",
     )
+    network: Network = Field(
+        default="unknown", description="Whether the provider who billed this line is in network."
+    )
+    facility_in_network: bool | None = Field(
+        default=None,
+        description="Whether the hospital or surgery center where it happened is in network.",
+    )
+    emergency: bool = Field(default=False, description="Emergency room or emergency care.")
+    preventive: bool = Field(default=False, description="Screening, wellness visit, or vaccine.")
+    provider_type: ProviderType = Field(
+        default="other", description="The kind of provider who billed this line."
+    )
+
+    # The AI's answers are free text at heart; an odd value means "unknown", not a lost line.
+    @field_validator("network", mode="before")
+    @classmethod
+    def _read_network(cls, value: object) -> str:
+        text = _token(value).removesuffix("_network").removesuffix("_of")
+        return text if text in get_args(Network) else "unknown"
+
+    @field_validator("provider_type", mode="before")
+    @classmethod
+    def _read_provider_type(cls, value: object) -> str:
+        text = _PROVIDER_ALIASES.get(_token(value), _token(value))
+        return text if text in get_args(ProviderType) else "other"
+
+    @field_validator("emergency", "preventive", mode="before")
+    @classmethod
+    def _read_flag(cls, value: object) -> bool:
+        return _yes_no(value) is True
+
+    @field_validator("facility_in_network", mode="before")
+    @classmethod
+    def _read_facility(cls, value: object) -> bool | None:
+        return _yes_no(value)
 
 
 class EobScanResponse(BaseModel):
