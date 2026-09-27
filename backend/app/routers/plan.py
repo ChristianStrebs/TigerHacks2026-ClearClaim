@@ -28,6 +28,10 @@ NOT_BENEFITS_DETAIL = (
     "This doesn't look like a health insurance benefits document. Try your Summary of "
     "Benefits and Coverage, your plan booklet, or a photo of your benefits page."
 )
+UNREADABLE_PDF_DETAIL = (
+    "This PDF couldn't be opened. It may be damaged or password-protected. Try saving it "
+    "again as a PDF, or upload a photo of your benefits page."
+)
 
 
 def _save_plan(
@@ -124,15 +128,16 @@ def _read_uploaded_plan(
         try:
             text = extract_pdf_text(data)
         except Exception as exc:  # noqa: BLE001 - surface a clean 400 to the client
-            raise HTTPException(status_code=400, detail=f"Could not read PDF: {exc}") from exc
+            raise HTTPException(status_code=400, detail=UNREADABLE_PDF_DETAIL) from exc
 
     # Text PDFs are sent as text; photos and scanned PDFs go to Gemini vision.
     extraction = services.gemini.extract_plan(text=text, file_bytes=data, mime_type=mime_type)
+    transcript = str(extraction.data.get("full_text") or "")
     return _apply_extracted_plan(
         services,
         store,
         fallback_name=file_name,
-        document_text=text or str(extraction.data.get("full_text") or ""),
+        document_text=max(text, transcript, key=len),
         extracted=extraction.data,
         summary_live=extraction.live,
     )
