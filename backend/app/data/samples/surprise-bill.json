@@ -1,0 +1,37 @@
+{
+  "is_medical_bill": true,
+  "provider": "Show-Me Anesthesia Associates (sample)",
+  "total_billed": 2700.0,
+  "line_items": [
+    {
+      "code": "01400",
+      "description": "Anesthesia for knee joint surgery",
+      "billed": 2100.0,
+      "plan_expected": 1660.0,
+      "covered": true,
+      "flag": "Out-of-network anesthesia at an in-network surgery center — you should only owe your in-network share.",
+      "network": "out",
+      "facility_in_network": true,
+      "emergency": false,
+      "preventive": false,
+      "provider_type": "anesthesiology"
+    },
+    {
+      "code": "64447",
+      "description": "Femoral nerve block injection",
+      "billed": 600.0,
+      "plan_expected": 120.0,
+      "covered": true,
+      "flag": "Given by the same out-of-network anesthesiologist, so the same protection applies.",
+      "network": "out",
+      "facility_in_network": true,
+      "emergency": false,
+      "preventive": false,
+      "provider_type": "anesthesiology"
+    }
+  ],
+  "overcharge_flags": [
+    "Lines 1-2: an out-of-network anesthesiologist at an in-network surgery center can't bill you the out-of-network balance. Your in-network share is at most $1,780, not $2,700."
+  ],
+  "summary": "Sample analysis: this $2,700 anesthesia bill is a surprise bill. Your surgery center was in network, so the No Surprises Act limits you to your in-network cost sharing: at most $1,780 (your remaining $1,550 deductible, then 20% of the rest), and less if the in-network rate is lower."
+}
