@@ -48,13 +48,13 @@ Not yet merged into `main`.
 - **Patient rights rules** in `backend/app/data/patient_rights.json`: 7 plain-language rules
   (preventive care, No Surprises Act emergency, specialist, and air ambulance protections,
   the ground ambulance gap, duplicate charges, and appeals). Each has what you should owe,
-  what to do, and an official source link. Not wired into the API yet.
+  what to do, and an official source link.
 - **Bills count toward the deductible.** Each scan now returns `you_owe` (what the member
   should pay once flagged charges are fixed), `applied_to_deductible`, and `file_sha256`.
-  The `benefits` in `GET /api/plan` and `POST /api/chat` add up `you_owe` across every
-  saved bill, capped at the deductible. Scanning the same file again replaces the earlier
-  scan instead of counting it twice. Gemini is told the deductible left before the bill, so
-  its per-line amounts match the member's progress.
+  The `benefits` in `GET /api/plan` and `POST /api/chat` add up `applied_to_deductible`
+  across every saved bill, so coinsurance never counts toward the deductible. Scanning the
+  same file again replaces the earlier scan instead of counting it twice. Gemini is told
+  the deductible left before the bill, so its per-line amounts match the member's progress.
 - **Remove one bill.** `DELETE /api/eob/scans/{scan_id}` returns `204` (or `404`), and the
   bill stops counting toward the deductible.
 - **Web app: your bills and total price.** The Scan tab lists saved bills so earlier ones
@@ -67,7 +67,13 @@ Not yet merged into `main`.
   `null`), `emergency`, `preventive`, and `provider_type` (for example `"facility"`,
   `"anesthesiology"`, `"air_ambulance"`, or `"other"`). Gemini fills them from the bill.
   Unrecognized values fall back to `"unknown"`, `null`, `false`, or `"other"` instead of
-  dropping the charge. Nothing uses them yet; the rights checks come next.
+  dropping the charge.
+- **Patient rights on every bill.** Each scan now returns `rights`: the protections that
+  may apply, as `{rule_id, title, explanation, you_should_owe, action, lines,
+  source_name, citation_url}`. `lines` names the charges each one covers, like
+  `"Anesthesia (00142)"`. Gemini only reads the facts off the bill; plain rules decide
+  which protection applies, so the same bill always gets the same answer. The chat sees
+  these findings too. Scans saved earlier return `rights: []`.
 - **Optional hosting configs.** `render.yaml` (backend on Render) and `frontend/vercel.json`
   (frontend on Vercel), with steps in the README's "Deploy (optional)" section. The app
   still runs fully locally without them.
