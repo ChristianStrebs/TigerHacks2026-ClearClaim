@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends
 from app import __version__
 from app.dependencies import AppServices, get_services
 from app.schemas import HealthResponse
+from app.services.benefits import snapshot
 
 router = APIRouter(tags=["system"])
 
@@ -22,4 +23,5 @@ def health(services: AppServices = Depends(get_services)) -> HealthResponse:
         chat_model=services.settings.gemini_chat_model,
         embed_model=services.settings.gemini_embed_model,
         indexed_chunks=services.vector_store.count(),
+        benefits=snapshot(services.plan),
     )
