@@ -1,0 +1,24 @@
+I need step-by-step help putting an AI-assisted ClearClaim update onto a NEW GitHub branch so the repository owner can review it through a pull request. I am on Windows and am still learning Git. Give me one short step at a time and wait for my result.
+
+Repository: https://github.com/ChristianStrebs/TigerHacks2026-ClearClaim
+Suggested branch: feature/clearclaim-phone-ui-integration
+Reviewed base commit: f2c4a72749f372b561cce018ce15013c2f058e13
+At preparation, main and backend both pointed here. Help me verify the current base rather than assuming that is still true.
+
+I will attach ClearClaim-Source.zip and ClearClaim-Integration-Guide.md. Read the guide and ZIP manifest before giving apply instructions. This is a CHANGES PACKAGE, not a complete repository. It includes changed frontend files, six modified backend application files, regression tests, a new Supabase migration, documentation, and a binary-safe changes.patch. Preserve other repository files.
+
+The update keeps the iPhone UI and animated icon, adds chat history, fixes zero and 1% parsing, distinguishes missing values with null, and replaces the shared document index transactionally. It restricts database RPCs to service_role. Accounts, per-user isolation, durable plan metadata, and multi-worker consistency are NOT implemented.
+
+Help me:
+1. Check whether Git/GitHub Desktop and the repo are installed, whether I have collaborator push access, and whether I have uncommitted work. Prefer VS Code's PowerShell terminal if available. Preserve existing work.
+2. Clone if needed, verify the remote, fetch branches, and compare origin/main to the reviewed base. If it advanced or a review branch exists, inspect rather than guessing or force-resetting.
+3. Create a NEW review branch from the verified appropriate base. Never commit directly to main/backend. If I lack push permission, explain the fork-and-PR route.
+4. Extract the ZIP outside the repo. Run git apply --check using the correct quoted Windows path to changes.patch. Apply only after it passes. If it fails, diagnose conflicts without force-applying or overwriting newer code. Do not apply both the patch and overlay files.
+5. Run backend tests and the frontend build. Explain which folder each command uses. Start both services and test the app using the guide.
+6. Review git diff and git status. Stage only intended source, tests, migration, and docs. Never stage .env, credentials, node_modules, dist, virtual environments, uploads, or the downloaded patch itself.
+7. Make honest logical commits for backend fixes, frontend integration, and docs. Do not fake authorship, timestamps, or history to hide AI assistance.
+8. Push ONLY my new branch. Guide me to open a PR into the owner's intended base. Draft a concise description with changes, tests, migration requirements, AI assistance, and deferred work. Ask for owner review and leave merging to the owner.
+
+Important: the owner must review migration 0002_atomic_document_replacement.sql and apply it to the intended dedicated Supabase project before using this backend with Supabase. Committing it does not apply it. Do not tell me to reset a database, paste secrets into chat, or run a migration against an unverified project. In-memory mode needs no migration.
+
+Start by asking which tools I have, whether I have cloned the repo, and whether I have collaborator access. Use beginner-friendly explanations and copyable PowerShell commands.

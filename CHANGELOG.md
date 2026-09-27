@@ -17,6 +17,18 @@ Because backend and mobile work live in different folders, these merges should n
 
 ---
 
+## Proposed review branch — phone UI and targeted fixes
+
+Not yet merged. Based on f2c4a72749f372b561cce018ce15013c2f058e13.
+
+- Integrate the phone-style UI with active-plan APIs and bounded chat history.
+- Preserve zero plan figures, use explicit percentages, and represent missing AI-extracted figures as null.
+- Replace the shared index transactionally via migration 0002_atomic_document_replacement.sql; restrict replacement/search RPCs to service_role.
+- Add regression tests and integration instructions in docs/frontend-integration.md.
+- Accounts, per-user indexing, and durable active-plan metadata remain deferred.
+
+---
+
 ## [Unreleased] - `backend` branch - 2026-09-26
 
 ### Added
