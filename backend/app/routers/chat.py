@@ -13,7 +13,7 @@ from app.services.benefits import (
     extract_dollar_amount,
     snapshot,
 )
-from app.services.bills import describe_scan, mentions_bill
+from app.services.bills import bills_owed, describe_scans, mentions_bill
 from app.services.indexing import search_plan
 from app.services.storage import MemberStore, PlanReplacedError
 
@@ -39,7 +39,7 @@ def chat(
     )
 
     context = "\n\n".join(f"[{hit.document}] {hit.text}" for hit in hits)
-    benefits = snapshot(plan)
+    benefits = snapshot(plan, bills_owed(store))
     plan_note = (
         "This is a sample demo plan; the member has not submitted their own benefits yet."
         if plan.source == "demo"
@@ -54,8 +54,8 @@ def chat(
         f"Out-of-pocket max: ${benefits.oop_max:,.0f}."
     )
 
-    latest = store.list_scans(limit=1)
-    scan = latest[0] if latest else None
+    scans = store.list_scans()
+    scan = scans[0] if scans else None
     billed_amount = payload.billed_amount
     # "Why was I charged $250 twice?" is about the scanned bill, not a procedure to estimate.
     if billed_amount is None and not (scan and mentions_bill(payload.message)):
@@ -70,7 +70,7 @@ def chat(
         benefits_text,
         cost_note=cost_estimate.explanation if cost_estimate else None,
         history=payload.history,
-        bill=describe_scan(scan) if scan else None,
+        bill=describe_scans(scans) or None,
     )
 
     sources = [
