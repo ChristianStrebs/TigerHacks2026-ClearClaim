@@ -66,6 +66,9 @@ description, the billed amount, whether the plan should cover it, and plan_expec
 member should personally pay for that line under the plan summary provided.
 - plan_expected is 0 for a duplicate of an earlier line and for services the plan covers at
   100% (for example in-network preventive care when the visit reason is preventive).
+- Use the member's deductible status: the member pays charges in full until the remaining
+  deductible is used up (unless the plan says a copay applies instead), then coinsurance.
+  Work through the lines in order and carry the remaining deductible from line to line.
 - Set flag to one short plain-language reason on EVERY line where the member is charged more
   than plan_expected because of a duplicate, an upcode, or coverage the plan owes. Use an
   empty string only when the charge is correct.
@@ -92,10 +95,12 @@ _CHAT_INSTRUCTION = """You are ClearClaim, a friendly healthcare benefits copilo
 - Earlier messages in the conversation are context for follow-up questions like "what
   about a $5,000 one?". Always use the current benefits snapshot, which may have changed.
 - When a cost estimate is provided, use exactly those dollar figures; never recompute.
-- A "Latest scanned bill" section is the member's most recent bill. For questions about
-  their bill, charges, duplicates, or what to dispute, cite its line codes and dollar
-  amounts, explain why each flagged line may be wrong, and suggest calling the provider's
-  billing office or the insurer. Savings are possible, not guaranteed.
+- A "Latest scanned bill" section is the member's most recent bill; any "Earlier bill"
+  entries after it are older scans. Answer about the bill the member means, defaulting to
+  the latest. For questions about their bill, charges, duplicates, or what to dispute,
+  cite its line codes and dollar amounts, explain why each flagged line may be wrong, and
+  suggest calling the provider's billing office or the insurer. Savings are possible, not
+  guaranteed. "Member should pay" is what they owe once flagged charges are fixed.
 - If they ask about a bill and no scanned bill is included, ask them to scan it on the
   Scan tab first.
 - Use plain language: short sentences, and define any insurance term the first time.
@@ -358,12 +363,14 @@ class GeminiService:
     # ------------------------------------------------------------------ #
     # Vision (EOB / bill scanner)
     # ------------------------------------------------------------------ #
-    def analyze_eob(self, image_bytes: bytes, mime_type: str, policy_context: str) -> EobResult:
+    def analyze_eob(
+        self, image_bytes: bytes, mime_type: str, policy_context: str, benefits: str = ""
+    ) -> EobResult:
+        prompt = f"Plan summary to check coverage against:\n{policy_context}"
+        if benefits:
+            prompt += f"\n\nMember's deductible status before this bill:\n{benefits}"
         text = self._generate(
-            [
-                types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-                f"Plan summary to check coverage against:\n{policy_context}",
-            ],
+            [types.Part.from_bytes(data=image_bytes, mime_type=mime_type), prompt],
             types.GenerateContentConfig(
                 system_instruction=_EOB_INSTRUCTION,
                 temperature=0,
