@@ -49,6 +49,8 @@ class TokenVerifier:
                 audience="authenticated",
                 issuer=self._issuer,
                 options={"require": ["exp", "sub"]},
+                # Tolerate small clock differences between this server and Supabase.
+                leeway=30,
             )
         except jwt.PyJWKClientConnectionError as exc:
             logger.warning("Couldn't fetch Supabase signing keys: %s", exc)
