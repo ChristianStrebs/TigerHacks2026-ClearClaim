@@ -18,7 +18,9 @@ class HealthResponse(BaseModel):
     chat_model: str
     embed_model: str
     indexed_chunks: int
-    benefits: BenefitsSnapshot
+    benefits: BenefitsSnapshot | None = Field(
+        description="Null until the member picks the sample plan or submits their own."
+    )
 
 
 class DocumentIngestRequest(BaseModel):
@@ -56,9 +58,11 @@ class PlanTextRequest(BaseModel):
 
 
 class PlanResponse(BaseModel):
-    plan_name: str
-    source: Literal["demo", "document"]
-    benefits: BenefitsSnapshot
+    plan_name: str | None = Field(description="Null when no plan has been chosen yet.")
+    source: Literal["none", "demo", "document"] = Field(
+        description="none = nothing chosen yet, demo = sample plan, document = member's own plan."
+    )
+    benefits: BenefitsSnapshot | None
     summary: str
     demo_mode: bool = Field(description="True when the summary did not come from live Gemini.")
 
