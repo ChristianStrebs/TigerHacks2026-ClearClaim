@@ -13,6 +13,7 @@ from app.services.benefits import (
     plan_response,
     sample_plan,
 )
+from app.services.bills import bills_owed
 from app.services.gemini import GeminiUnavailableError
 from app.services.indexing import embed_document, load_sample_policy
 from app.services.ingestion import extract_pdf_text
@@ -75,7 +76,9 @@ def _apply_extracted_plan(
 @router.get("", response_model=PlanResponse)
 def get_plan(store: MemberStore = Depends(member_store)) -> PlanResponse:
     saved = store.get_plan()
-    return plan_response(saved.profile if saved else None)
+    if saved is None:
+        return plan_response(None)
+    return plan_response(saved.profile, bills_owed(store))
 
 
 @router.post("/text", response_model=PlanResponse)
