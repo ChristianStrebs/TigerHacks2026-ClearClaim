@@ -15,13 +15,13 @@ import json
 import logging
 import re
 from collections.abc import Sequence
-from typing import NamedTuple
+from typing import NamedTuple, get_args
 
 from google import genai
 from google.genai import types
 
 from app.config import Settings
-from app.schemas import ChatTurn
+from app.schemas import ChatTurn, Network, ProviderType
 from app.services.benefits import extract_plan_numbers_offline
 from app.services.bills import mentions_bill
 
@@ -74,6 +74,13 @@ member should personally pay for that line under the plan summary provided.
   empty string only when the charge is correct.
 - overcharge_flags lists one plain-language sentence per flagged line.
 - Stay consistent: if the summary says a charge should be covered, that line must be flagged.
+- Also describe each line for patient-protection checks, using only what the file says:
+  network is "in" or "out" for the provider who billed the line, or "unknown" if the file
+  doesn't say; facility_in_network is whether the hospital, hospital outpatient department,
+  or surgery center where the care happened is in network (null if unknown or not at a
+  facility); emergency is true only for emergency room or emergency care; preventive is true
+  for wellness visits, screenings, and routine vaccines; provider_type is the kind of
+  provider who billed the line ("facility" for hospital or surgery center fees).
 - Set is_medical_bill to false when the file is not a medical bill, statement, or EOB (for
   example a recipe, a store receipt, a benefits booklet, or a random photo); then return no
   line items and a total of 0.
@@ -390,6 +397,13 @@ class GeminiService:
         return EobResult(data, live=True)
 
     def _fallback_eob(self) -> dict:
+        in_network_checkup = {
+            "network": "in",
+            "facility_in_network": None,
+            "emergency": False,
+            "preventive": True,
+            "provider_type": "primary_care",
+        }
         return {
             "provider": "Mizzou Health Partners (sample)",
             "total_billed": 565.00,
@@ -401,6 +415,7 @@ class GeminiService:
                     "plan_expected": 0.00,
                     "covered": True,
                     "flag": "Annual wellness visit — preventive care is $0 under your plan.",
+                    **in_network_checkup,
                 },
                 {
                     "code": "90686",
@@ -409,6 +424,7 @@ class GeminiService:
                     "plan_expected": 0.00,
                     "covered": True,
                     "flag": "Routine vaccine — covered at 100% under your plan.",
+                    **in_network_checkup,
                 },
                 {
                     "code": "90471",
@@ -417,6 +433,7 @@ class GeminiService:
                     "plan_expected": 0.00,
                     "covered": True,
                     "flag": "Giving the vaccine is part of preventive care — should be $0.",
+                    **in_network_checkup,
                 },
                 {
                     "code": "99396",
@@ -425,6 +442,7 @@ class GeminiService:
                     "plan_expected": 0.00,
                     "covered": False,
                     "flag": "Exact duplicate of line 1 on the same date.",
+                    **in_network_checkup,
                 },
             ],
             "overcharge_flags": [
@@ -457,8 +475,22 @@ _EOB_SCHEMA = {
                     "plan_expected": {"type": "number"},
                     "covered": {"type": "boolean"},
                     "flag": {"type": "string"},
+                    "network": {"type": "string", "enum": list(get_args(Network))},
+                    "facility_in_network": {"type": "boolean", "nullable": True},
+                    "emergency": {"type": "boolean"},
+                    "preventive": {"type": "boolean"},
+                    "provider_type": {"type": "string", "enum": list(get_args(ProviderType))},
                 },
-                "required": ["code", "description", "billed", "covered"],
+                "required": [
+                    "code",
+                    "description",
+                    "billed",
+                    "covered",
+                    "network",
+                    "emergency",
+                    "preventive",
+                    "provider_type",
+                ],
             },
         },
         "overcharge_flags": {"type": "array", "items": {"type": "string"}},
