@@ -1,11 +1,11 @@
-"""Bill scans are remembered so the member can come back to them and ask about them."""
+﻿"""Bill scans are remembered so the member can come back to them and ask about them."""
 
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from app.dependencies import MAX_SAVED_SCANS
 from app.routers.samples import SAMPLES_DIR
+from app.services.storage import MAX_SAVED_SCANS
 
 _SAMPLE_BILL = (SAMPLES_DIR / "sample-bill.pdf").read_bytes()
 
