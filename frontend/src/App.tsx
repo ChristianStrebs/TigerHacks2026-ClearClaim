@@ -19,6 +19,7 @@ import {
 import { Icon } from "./Icon";
 import { chatHistory } from "./chatHistory";
 import { ChoosePlan } from "./components/ChoosePlan";
+import { DisputeSheet } from "./components/DisputeSheet";
 import {
   CoverageCard,
   DemoNote,
@@ -142,6 +143,7 @@ export default function App() {
   const [review, setReview] = useState<EobScanResponse | null>(null);
   const [scanError, setScanError] = useState("");
   const [sheet, setSheet] = useState<Sheet>(null);
+  const [disputeScan, setDisputeScan] = useState<EobScanResponse | null>(null);
   const [title, setTitle] = useState("");
   const [policyText, setPolicyText] = useState("");
   const [planError, setPlanError] = useState("");
@@ -916,6 +918,16 @@ export default function App() {
                             </p>
                           </section>
                         )}
+                        {(review.potential_savings > 0 ||
+                          review.rights.length > 0) && (
+                          <button
+                            className="primary full fix-bill-button"
+                            disabled={!available}
+                            onClick={() => setDisputeScan(review)}
+                          >
+                            <Icon name="shield" size={17} /> Fix this bill
+                          </button>
+                        )}
                         <div className="white-card">
                           <small>{review.provider ?? "Your bill"}</small>
                           <div className="total-line">
@@ -1331,6 +1343,13 @@ export default function App() {
               </p>
             )}
           </dialog>
+          {disputeScan && (
+            <DisputeSheet
+              key={disputeScan.scan_id}
+              scan={disputeScan}
+              onClose={() => setDisputeScan(null)}
+            />
+          )}
         </div>
       </div>
     </div>
