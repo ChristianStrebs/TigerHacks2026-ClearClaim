@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ApiError,
+  chooseSamplePlan,
+  clearPlan,
   downloadSample,
   getHealth,
   getPlan,
   getSamples,
-  resetPlan,
+  getScans,
   scanEob,
   sendChat,
   submitPlanText,
@@ -14,6 +16,7 @@ import {
 } from "./api";
 import { Icon } from "./Icon";
 import { chatHistory } from "./chatHistory";
+import { ChoosePlan } from "./components/ChoosePlan";
 import {
   CoverageCard,
   DemoNote,
@@ -27,21 +30,18 @@ import type {
   EobScanResponse,
   HealthResponse,
   PlanResponse,
+  PlanSource,
   SampleFile,
 } from "./types";
 
 type Tab = "home" | "chat" | "scan" | "plan";
 type Pending = "chat" | "scan" | "plan" | null;
-type Sheet = "upload" | "reset" | null;
+type Sheet = "upload" | "clear" | null;
+type PlanAction = "upload" | "text" | "sample-file" | "sample-plan" | "clear";
 interface Turn {
   question: string;
   response?: ChatResponse;
   error?: string;
-}
-interface BillReview {
-  result: EobScanResponse;
-  fileName: string;
-  planName: string;
 }
 
 const SUGGESTIONS = [
@@ -50,6 +50,26 @@ const SUGGESTIONS = [
   "Is my annual wellness visit covered?",
   "What do I pay for generic prescriptions?",
 ];
+const BILL_SUGGESTIONS = [
+  "Which charges on my bill should I question?",
+  "Why was I charged twice?",
+  "Explain my bill in plain English.",
+  "What should I say when I call the billing office?",
+];
+function planNotice(source: PlanSource): string {
+  switch (source) {
+    case "none":
+      return "Started over. Choose sample data or add your own plan.";
+    case "demo":
+      return "Sample data loaded. Figures marked Demo* are made up.";
+    case "document":
+      return "Active plan updated. Chat and bill scans now use this plan.";
+    default: {
+      const unhandled: never = source;
+      return unhandled;
+    }
+  }
+}
 const errorMessage = (error: unknown) =>
   error instanceof Error
     ? error.message
@@ -71,7 +91,7 @@ export default function App() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [question, setQuestion] = useState("");
   const [cost, setCost] = useState("");
-  const [review, setReview] = useState<BillReview | null>(null);
+  const [review, setReview] = useState<EobScanResponse | null>(null);
   const [scanError, setScanError] = useState("");
   const [sheet, setSheet] = useState<Sheet>(null);
   const [title, setTitle] = useState("");
@@ -88,17 +108,20 @@ export default function App() {
   const syncVersion = useRef(0);
   const planSignature = useRef("");
   const busy = pending !== null || syncing;
-  const available = !!plan && !!health && !busy;
+  const hasPlan = !!plan && plan.source !== "none";
+  const canChoosePlan = !!health && !busy;
+  const available = hasPlan && canChoosePlan;
 
   async function refresh() {
     if (operation.current) return;
     const version = ++syncVersion.current;
     setSyncing(true);
     setConnectionError("");
-    const [h, p, s] = await Promise.allSettled([
+    const [h, p, s, saved] = await Promise.allSettled([
       getHealth(),
       getPlan(),
       getSamples(),
+      getScans(),
     ]);
     if (version !== syncVersion.current) return;
     const errors: string[] = [];
@@ -138,6 +161,8 @@ export default function App() {
         "Sample files are unavailable. You can still upload your own file.",
       );
     }
+    // The backend forgets scans when the plan changes, so its newest scan is current.
+    if (saved.status === "fulfilled") setReview(saved.value[0] ?? null);
     setConnectionError([...new Set(errors)].join(" "));
     setSyncing(false);
   }
@@ -186,7 +211,7 @@ export default function App() {
     setSampleName("");
     setSheet("upload");
   }
-  function acceptPlan(next: PlanResponse) {
+  function acceptPlan(next: PlanResponse, nextTab: Tab) {
     planSignature.current = JSON.stringify(next);
     setPlan(next);
     setBenefits(next.benefits);
@@ -201,36 +226,47 @@ export default function App() {
     setSampleName("");
     setConnectionError("");
     setSheet(null);
-    setTab("plan");
-    setNotice(
-      next.source === "demo"
-        ? "The shared plan has been reset to the sample."
-        : "Active plan updated. Chat and bill scans now use this plan.",
-    );
+    setTab(nextTab);
+    setNotice(planNotice(next.source));
   }
-  async function changePlan(action: "upload" | "text" | "sample" | "reset") {
-    if (!begin("plan")) return;
-    setPlanError("");
-    setNotice("");
-    try {
-      let next: PlanResponse;
-      if (action === "reset") next = await resetPlan();
-      else if (action === "text")
-        next = await submitPlanText(
+  async function requestPlan(action: PlanAction): Promise<PlanResponse> {
+    switch (action) {
+      case "sample-plan":
+        return chooseSamplePlan();
+      case "clear":
+        return clearPlan();
+      case "text":
+        return submitPlanText(
           title.trim() || "Pasted policy",
           policyText.trim(),
         );
-      else if (action === "sample") {
+      case "sample-file": {
         const selected = samples.find(
           (sample) => sample.name === sampleName && sample.kind === "benefits",
         );
         if (!selected) throw new Error("Choose a sample benefits file.");
-        next = await uploadPlan(await downloadSample(selected));
-      } else {
-        if (!attachedFile) throw new Error("Choose a plan file first.");
-        next = await uploadPlan(attachedFile);
+        return uploadPlan(await downloadSample(selected));
       }
-      acceptPlan(next);
+      case "upload":
+        if (!attachedFile) throw new Error("Choose a plan file first.");
+        return uploadPlan(attachedFile);
+      default: {
+        const unhandled: never = action;
+        return unhandled;
+      }
+    }
+  }
+  async function changePlan(action: PlanAction) {
+    if (!begin("plan")) return;
+    setPlanError("");
+    setNotice("");
+    try {
+      const next = await requestPlan(action);
+      // The sample and start-over paths begin from Home; plan uploads show the summary.
+      acceptPlan(
+        next,
+        action === "sample-plan" || action === "clear" ? "home" : "plan",
+      );
     } catch (error) {
       setPlanError(errorMessage(error));
     } finally {
@@ -274,12 +310,7 @@ export default function App() {
     try {
       const selected = file ?? (sample ? await downloadSample(sample) : null);
       if (!selected) throw new Error("Choose a bill to review.");
-      const result = await scanEob(selected);
-      setReview({
-        result,
-        fileName: selected.name,
-        planName: plan?.plan_name ?? "Active plan",
-      });
+      setReview(await scanEob(selected));
     } catch (error) {
       setScanError(errorMessage(error));
     } finally {
@@ -295,9 +326,25 @@ export default function App() {
       action={tab === "plan" ? "Ask about this plan" : undefined}
     />
   );
+  const choosePlan = health ? (
+    <>
+      <ChoosePlan
+        disabled={!canChoosePlan}
+        onOwnPlan={openUpload}
+        onSample={() => void changePlan("sample-plan")}
+      />
+      {planError && !sheet && (
+        <p className="error" role="alert">
+          {planError}
+        </p>
+      )}
+    </>
+  ) : (
+    coverage
+  );
   const billSamples = samples.filter((sample) => sample.kind === "bill");
   const planSamples = samples.filter((sample) => sample.kind === "benefits");
-  const result = review?.result;
+  const suggestions = review ? BILL_SUGGESTIONS : SUGGESTIONS;
 
   return (
     <div className="stage">
@@ -388,51 +435,62 @@ export default function App() {
                   </h1>
                   <p>Understand your plan. Know your costs.</p>
                 </div>
-                {coverage}
-                {benefits && <DemoNote benefits={benefits} />}
-                <div className="section-heading">
-                  <h2>How can we help?</h2>
-                </div>
-                <div className="action-grid">
-                  <button onClick={() => setTab("chat")}>
-                    <span className="action-icon">
-                      <Icon name="chat" size={25} />
-                    </span>
-                    <strong>Ask ClearClaim</strong>
-                    <span>
-                      Your benefits,
-                      <br />
-                      in plain English
-                    </span>
-                    <Icon name="arrow" size={18} />
-                  </button>
-                  <button onClick={() => setTab("scan")}>
-                    <span className="action-icon pale">
-                      <Icon name="scan" size={25} />
-                    </span>
-                    <strong>Check a bill</strong>
-                    <span>
-                      A second look
-                      <br />
-                      at your charges
-                    </span>
-                    <Icon name="arrow" size={18} />
-                  </button>
-                </div>
-                <button
-                  className="question-card"
-                  disabled={!available}
-                  onClick={() => void ask(SUGGESTIONS[2])}
-                >
-                  <span className="mini-icon">
-                    <Icon name="spark" />
-                  </span>
-                  <span>
-                    <small>A GOOD PLACE TO START</small>
-                    <strong>Is my wellness visit covered?</strong>
-                  </span>
-                  <Icon name="chevron" size={17} />
-                </button>
+                {notice && (
+                  <p className="notice" role="status">
+                    {notice}
+                  </p>
+                )}
+                {hasPlan ? (
+                  <>
+                    {coverage}
+                    {benefits && <DemoNote benefits={benefits} />}
+                    <div className="section-heading">
+                      <h2>How can we help?</h2>
+                    </div>
+                    <div className="action-grid">
+                      <button onClick={() => setTab("chat")}>
+                        <span className="action-icon">
+                          <Icon name="chat" size={25} />
+                        </span>
+                        <strong>Ask ClearClaim</strong>
+                        <span>
+                          Your benefits,
+                          <br />
+                          in plain English
+                        </span>
+                        <Icon name="arrow" size={18} />
+                      </button>
+                      <button onClick={() => setTab("scan")}>
+                        <span className="action-icon pale">
+                          <Icon name="scan" size={25} />
+                        </span>
+                        <strong>Check a bill</strong>
+                        <span>
+                          A second look
+                          <br />
+                          at your charges
+                        </span>
+                        <Icon name="arrow" size={18} />
+                      </button>
+                    </div>
+                    <button
+                      className="question-card"
+                      disabled={!available}
+                      onClick={() => void ask(SUGGESTIONS[2])}
+                    >
+                      <span className="mini-icon">
+                        <Icon name="spark" />
+                      </span>
+                      <span>
+                        <small>A GOOD PLACE TO START</small>
+                        <strong>Is my wellness visit covered?</strong>
+                      </span>
+                      <Icon name="chevron" size={17} />
+                    </button>
+                  </>
+                ) : (
+                  choosePlan
+                )}
                 <p className="footnote">
                   Financial and administrative guidance only. Estimates are not
                   guaranteed costs.
@@ -445,22 +503,33 @@ export default function App() {
                   <span className="eyebrow">BENEFITS COPILOT</span>
                   <h1>A clearer answer.</h1>
                   <p>
-                    {plan
-                      ? `Using ${plan.plan_name}`
-                      : "Connect to load your plan."}
+                    {hasPlan
+                      ? `Using ${plan?.plan_name}`
+                      : "Choose a plan to start asking questions."}
                   </p>
+                  {hasPlan && review && (
+                    <p className="bill-context">
+                      <Icon name="scan" size={16} />
+                      Also using your bill from{" "}
+                      {review.provider ?? review.file_name}
+                    </p>
+                  )}
                 </div>
-                {turns.length === 0 ? (
+                {!hasPlan ? (
+                  choosePlan
+                ) : turns.length === 0 ? (
                   <>
                     <div className="chat-orb">
                       <Icon name="spark" size={32} />
                     </div>
                     <h2 className="center">What’s on your mind?</h2>
                     <p className="center muted">
-                      Include a dollar amount for a cost estimate.
+                      {review
+                        ? "Ask about your bill or your plan."
+                        : "Include a dollar amount for a cost estimate."}
                     </p>
                     <div className="suggestion-list">
-                      {SUGGESTIONS.map((suggestion, index) => (
+                      {suggestions.map((suggestion, index) => (
                         <button
                           key={suggestion}
                           disabled={!available}
@@ -485,7 +554,11 @@ export default function App() {
                           <div className="answer">
                             <div className="answer-label">
                               <Icon name="spark" size={16} /> ClearClaim{" "}
-                              <small>{aiLabel(turn.response.demo_mode)}</small>
+                              <small>
+                                {aiLabel(turn.response.demo_mode)}
+                                {turn.response.bill_scan_id &&
+                                  " · used your bill"}
+                              </small>
                             </div>
                             <PolicyText text={turn.response.answer} />
                             {turn.response.cost_estimate && (
@@ -540,138 +613,149 @@ export default function App() {
                   <h1>Let’s check that bill.</h1>
                   <p>Spot charges worth a closer look.</p>
                 </div>
-                <label
-                  className={`scan-upload ${!available ? "disabled-upload" : ""}`}
-                >
-                  <input
-                    aria-label="Upload medical bill"
-                    type="file"
-                    accept={UPLOAD_ACCEPT}
-                    disabled={!available}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      event.target.value = "";
-                      if (file) void scanBill(file);
-                    }}
-                  />
-                  <span className="scan-symbol">
-                    <Icon name="scan" size={45} />
-                  </span>
-                  <strong>
-                    {pending === "scan"
-                      ? "Reviewing your bill…"
-                      : "Upload your bill"}
-                  </strong>
-                  <span>PDF or photo, including HEIC · up to 15 MB</span>
-                  <span className="upload-pill">
-                    <Icon name="upload" size={16} /> Choose a file
-                  </span>
-                </label>
-                {billSamples.map((sample) => (
-                  <button
-                    className="secondary full sample-button"
-                    key={sample.name}
-                    disabled={!available}
-                    onClick={() => void scanBill(undefined, sample)}
-                  >
-                    Try sample bill
-                  </button>
-                ))}
-                {sampleError && <p className="muted">{sampleError}</p>}
-                <p className="demo-callout">
-                  <Icon name="info" size={18} />
-                  Files are sent to your backend. If AI is unavailable, the
-                  backend may return a sample bill result, clearly labeled
-                  below.
-                </p>
-                {scanError && (
-                  <p className="error" role="alert">
-                    {scanError}
-                  </p>
-                )}
-                {result && review && (
-                  <div className="scan-results" aria-live="polite">
-                    <div className="section-heading">
-                      <h2>Bill review</h2>
-                      <span className="mode">
-                        {result.demo_mode ? "Sample result" : "Gemini result"}
+                {!hasPlan ? (
+                  choosePlan
+                ) : (
+                  <>
+                    <label
+                      className={`scan-upload ${!available ? "disabled-upload" : ""}`}
+                    >
+                      <input
+                        aria-label="Upload medical bill"
+                        type="file"
+                        accept={UPLOAD_ACCEPT}
+                        disabled={!available}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          event.target.value = "";
+                          if (file) void scanBill(file);
+                        }}
+                      />
+                      <span className="scan-symbol">
+                        <Icon name="scan" size={45} />
                       </span>
-                    </div>
-                    {result.demo_mode && (
-                      <p className="error">
-                        This is the backend’s sample analysis, not an analysis
-                        of {review.fileName}.
-                      </p>
-                    )}
-                    <section className="savings-card">
-                      <span>
-                        POTENTIAL SAVINGS{result.demo_mode ? " · SAMPLE" : ""}
+                      <strong>
+                        {pending === "scan"
+                          ? "Reviewing your bill…"
+                          : "Upload your bill"}
+                      </strong>
+                      <span>PDF or photo, including HEIC · up to 15 MB</span>
+                      <span className="upload-pill">
+                        <Icon name="upload" size={16} /> Choose a file
                       </span>
-                      <strong>{money(result.potential_savings)}</strong>
-                      <p>
-                        Flagged charges to discuss with your provider. Savings
-                        are not guaranteed.
-                      </p>
-                    </section>
-                    <div className="white-card">
-                      <small>{result.provider ?? "Your bill"}</small>
-                      <div className="total-line">
-                        <span>Total billed</span>
-                        <strong>{money(result.total_billed)}</strong>
-                      </div>
-                      <PolicyText text={result.summary} />
-                      <p className="review-context">
-                        Plan at submission: {review.planName}
-                      </p>
-                    </div>
-                    {result.overcharge_flags.length > 0 && (
-                      <div className="flag-card">
-                        <strong>Things to review</strong>
-                        {result.overcharge_flags.map((flag, i) => (
-                          <p key={i}>{flag}</p>
-                        ))}
-                      </div>
-                    )}
-                    <h2 className="section-label">Line items</h2>
-                    {result.line_items.length === 0 && (
-                      <p className="muted">
-                        No line items were returned. Try a clearer image or PDF.
-                      </p>
-                    )}
-                    {result.line_items.map((item, i) => (
-                      <article className="line-item" key={i}>
-                        <div className="line-code">
-                          CPT {item.code}
-                          <span
-                            className={
-                              item.flag ? "review-badge" : "covered-badge"
-                            }
-                          >
-                            {item.flag
-                              ? "Review"
-                              : item.covered
-                                ? "Covered"
-                                : "Check"}
-                          </span>
-                        </div>
-                        <h3>{item.description}</h3>
-                        <div className="line-money">
-                          <span>
-                            Billed <b>{money(item.billed)}</b>
-                          </span>
-                          <span>
-                            Expected member cost{" "}
-                            <b>
-                              {item.plan_expected === null
-                                ? "Unknown"
-                                : money(item.plan_expected)}
-                            </b>
-                          </span>
-                        </div>
-                        {item.flag && <p>{item.flag}</p>}
-                      </article>
+                    </label>
+                    {billSamples.map((sample) => (
+                      <button
+                        className="secondary full sample-button"
+                        key={sample.name}
+                        disabled={!available}
+                        onClick={() => void scanBill(undefined, sample)}
+                      >
+                        Try sample bill
+                      </button>
                     ))}
-                  </div>
+                    {sampleError && <p className="muted">{sampleError}</p>}
+                    <p className="demo-callout">
+                      <Icon name="info" size={18} />
+                      Bills are reviewed by AI. If AI is unavailable, only the
+                      sample bill can be reviewed, and it's clearly labeled.
+                    </p>
+                    {scanError && (
+                      <p className="error" role="alert">
+                        {scanError}
+                      </p>
+                    )}
+                    {review && (
+                      <div className="scan-results" aria-live="polite">
+                        <div className="section-heading">
+                          <h2>Bill review</h2>
+                          <span className="mode">
+                            {review.demo_mode
+                              ? "Sample result"
+                              : "Gemini result"}
+                          </span>
+                        </div>
+                        {review.demo_mode && (
+                          <p className="notice">
+                            AI is offline, so this is the saved analysis of the
+                            sample bill.
+                          </p>
+                        )}
+                        <section className="savings-card">
+                          <span>
+                            POTENTIAL SAVINGS
+                            {review.demo_mode ? " · SAMPLE" : ""}
+                          </span>
+                          <strong>{money(review.potential_savings)}</strong>
+                          <p>
+                            Flagged charges to discuss with your provider.
+                            Savings are not guaranteed.
+                          </p>
+                        </section>
+                        <div className="white-card">
+                          <small>{review.provider ?? "Your bill"}</small>
+                          <div className="total-line">
+                            <span>Total billed</span>
+                            <strong>{money(review.total_billed)}</strong>
+                          </div>
+                          <PolicyText text={review.summary} />
+                          <p className="review-context">
+                            {review.file_name} · checked against{" "}
+                            {review.plan_name}
+                          </p>
+                        </div>
+                        {review.overcharge_flags.length > 0 && (
+                          <div className="flag-card">
+                            <strong>Things to review</strong>
+                            {review.overcharge_flags.map((flag, i) => (
+                              <p key={i}>{flag}</p>
+                            ))}
+                          </div>
+                        )}
+                        <h2 className="section-label">Line items</h2>
+                        {review.line_items.map((item, i) => (
+                          <article className="line-item" key={i}>
+                            <div className="line-code">
+                              CPT {item.code}
+                              <span
+                                className={
+                                  item.flag ? "review-badge" : "covered-badge"
+                                }
+                              >
+                                {item.flag
+                                  ? "Review"
+                                  : item.covered
+                                    ? "Covered"
+                                    : "Check"}
+                              </span>
+                            </div>
+                            <h3>{item.description}</h3>
+                            <div className="line-money">
+                              <span>
+                                Billed <b>{money(item.billed)}</b>
+                              </span>
+                              <span>
+                                Expected member cost{" "}
+                                <b>
+                                  {item.plan_expected === null
+                                    ? "Unknown"
+                                    : money(item.plan_expected)}
+                                </b>
+                              </span>
+                            </div>
+                            {item.flag && <p>{item.flag}</p>}
+                          </article>
+                        ))}
+                        <button
+                          className="primary full sample-button"
+                          disabled={!available}
+                          onClick={() => setTab("chat")}
+                        >
+                          <Icon name="chat" size={17} /> Ask about this bill
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -680,104 +764,110 @@ export default function App() {
                 <div className="page-title">
                   <span className="eyebrow">YOUR BENEFITS</span>
                   <h1>The bigger picture.</h1>
-                  <p>{plan?.plan_name ?? "Connect to load the active plan."}</p>
+                  <p>{plan?.plan_name ?? "No plan chosen yet."}</p>
                 </div>
                 {notice && (
                   <p className="notice" role="status">
                     {notice}
                   </p>
                 )}
-                {coverage}
-                {benefits && (
+                {!hasPlan ? (
+                  choosePlan
+                ) : (
                   <>
-                    <DemoNote benefits={benefits} />
-                    <section className="white-card plan-stats">
-                      <div>
-                        <span>Your coinsurance</span>
-                        <strong>
-                          {(benefits.coinsurance_rate * 100).toLocaleString(
-                            "en-US",
-                            { maximumFractionDigits: 4 },
-                          )}
-                          %{demoMark(benefits, "coinsurance_rate")}
-                        </strong>
-                      </div>
-                      <div>
-                        <span>Plan pays after deductible</span>
-                        <strong>
-                          {(
-                            (1 - benefits.coinsurance_rate) *
-                            100
-                          ).toLocaleString("en-US", {
-                            maximumFractionDigits: 4,
-                          })}
-                          %{demoMark(benefits, "coinsurance_rate")}
-                        </strong>
-                      </div>
-                      <div>
-                        <span>Out-of-pocket maximum</span>
-                        <strong>
-                          {money(benefits.oop_max)}
-                          {demoMark(benefits, "oop_max")}
-                        </strong>
-                      </div>
-                    </section>
+                    {coverage}
+                    {benefits && (
+                      <>
+                        <DemoNote benefits={benefits} />
+                        <section className="white-card plan-stats">
+                          <div>
+                            <span>Your coinsurance</span>
+                            <strong>
+                              {(benefits.coinsurance_rate * 100).toLocaleString(
+                                "en-US",
+                                { maximumFractionDigits: 4 },
+                              )}
+                              %{demoMark(benefits, "coinsurance_rate")}
+                            </strong>
+                          </div>
+                          <div>
+                            <span>Plan pays after deductible</span>
+                            <strong>
+                              {(
+                                (1 - benefits.coinsurance_rate) *
+                                100
+                              ).toLocaleString("en-US", {
+                                maximumFractionDigits: 4,
+                              })}
+                              %{demoMark(benefits, "coinsurance_rate")}
+                            </strong>
+                          </div>
+                          <div>
+                            <span>Out-of-pocket maximum</span>
+                            <strong>
+                              {money(benefits.oop_max)}
+                              {demoMark(benefits, "oop_max")}
+                            </strong>
+                          </div>
+                        </section>
+                      </>
+                    )}
+                    {plan && (
+                      <>
+                        <div className="section-heading">
+                          <h2>Active plan</h2>
+                          <span className="mode">
+                            {plan.source === "demo"
+                              ? "Sample plan"
+                              : "Uploaded plan"}
+                          </span>
+                        </div>
+                        <div className="white-card active-plan">
+                          <h3>{plan.plan_name}</h3>
+                          <span className="summary-label">
+                            {aiLabel(plan.demo_mode)}
+                          </span>
+                          <PolicyText text={plan.summary} />
+                        </div>
+                      </>
+                    )}
+                    <button
+                      className="primary full sample-button"
+                      disabled={!canChoosePlan}
+                      onClick={openUpload}
+                    >
+                      <Icon name="upload" size={17} /> Upload or paste a plan
+                    </button>
+                    <div className="plan-controls">
+                      <button
+                        className="secondary"
+                        disabled={busy}
+                        onClick={() => void refresh()}
+                      >
+                        <Icon name="refresh" size={15} /> Refresh
+                      </button>
+                      <button
+                        className="secondary"
+                        disabled={!available}
+                        onClick={() => {
+                          setPlanError("");
+                          setSheet("clear");
+                        }}
+                      >
+                        Start over
+                      </button>
+                    </div>
                   </>
                 )}
-                {plan && (
-                  <>
-                    <div className="section-heading">
-                      <h2>Active plan</h2>
-                      <span className="mode">
-                        {plan.source === "demo"
-                          ? "Sample plan"
-                          : "Uploaded plan"}
-                      </span>
-                    </div>
-                    <div className="white-card active-plan">
-                      <h3>{plan.plan_name}</h3>
-                      <span className="summary-label">
-                        {aiLabel(plan.demo_mode)}
-                      </span>
-                      <PolicyText text={plan.summary} />
-                    </div>
-                  </>
-                )}
-                <button
-                  className="primary full sample-button"
-                  disabled={!available}
-                  onClick={openUpload}
-                >
-                  <Icon name="upload" size={17} /> Upload or paste a plan
-                </button>
-                <div className="plan-controls">
-                  <button
-                    className="secondary"
-                    disabled={busy}
-                    onClick={() => void refresh()}
-                  >
-                    <Icon name="refresh" size={15} /> Refresh
-                  </button>
-                  <button
-                    className="secondary"
-                    disabled={!available}
-                    onClick={() => {
-                      setPlanError("");
-                      setSheet("reset");
-                    }}
-                  >
-                    Reset to sample
-                  </button>
-                </div>
                 <p className="footnote">
-                  One shared plan for this server. Uploading or resetting
-                  changes it for everyone. Uploaded plans start with $0
+                  One shared plan for this server. Choosing a plan or starting
+                  over changes it for everyone. Uploaded plans start with $0
                   deductible met; this app does not track paid claims.
                 </p>
               </div>
             )}
           </main>
-          {tab === "chat" && (
+          {tab === "chat" && hasPlan && (
             <form
               className="composer"
               onSubmit={(event) => {
@@ -851,11 +941,7 @@ export default function App() {
             className="policy-dialog"
           >
             <div className="section-heading">
-              <h2>
-                {sheet === "reset"
-                  ? "Reset the shared plan?"
-                  : "Update your plan"}
-              </h2>
+              <h2>{sheet === "clear" ? "Start over?" : "Add your plan"}</h2>
               <button
                 type="button"
                 className="icon-button"
@@ -867,16 +953,17 @@ export default function App() {
               </button>
             </div>
             <p className="shared-warning">
-              This replaces the active plan for everyone using this backend and
-              clears this screen’s previous chat and scan results.
+              {sheet === "clear"
+                ? "This removes the active plan and saved bill scans for everyone using this backend, then returns to the welcome screen."
+                : "This replaces the active plan for everyone using this backend and clears previous chats and bill scans."}
             </p>
-            {sheet === "reset" ? (
+            {sheet === "clear" ? (
               <button
                 className="primary full"
                 disabled={busy}
-                onClick={() => void changePlan("reset")}
+                onClick={() => void changePlan("clear")}
               >
-                Confirm reset to sample
+                Yes, start over
               </button>
             ) : (
               <>
@@ -953,7 +1040,7 @@ export default function App() {
                         <button
                           className="secondary full"
                           disabled={busy || !sampleName}
-                          onClick={() => void changePlan("sample")}
+                          onClick={() => void changePlan("sample-file")}
                         >
                           Use sample benefits
                         </button>
