@@ -52,7 +52,7 @@ class PlanProfile:
 
 
 def sample_plan(settings: Settings) -> PlanProfile:
-    """The bundled demo plan every session starts with."""
+    """The bundled demo plan, loaded when the member chooses to try sample data."""
     return PlanProfile(
         name=SAMPLE_PLAN_NAME,
         source="demo",
@@ -175,7 +175,11 @@ def snapshot(plan: PlanProfile) -> BenefitsSnapshot:
     )
 
 
-def plan_response(plan: PlanProfile) -> PlanResponse:
+def plan_response(plan: PlanProfile | None) -> PlanResponse:
+    if plan is None:
+        return PlanResponse(
+            plan_name=None, source="none", benefits=None, summary="", demo_mode=False
+        )
     return PlanResponse(
         plan_name=plan.name,
         source=plan.source,
