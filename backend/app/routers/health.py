@@ -23,5 +23,5 @@ def health(services: AppServices = Depends(get_services)) -> HealthResponse:
         chat_model=services.settings.gemini_chat_model,
         embed_model=services.settings.gemini_embed_model,
         indexed_chunks=services.vector_store.count(),
-        benefits=snapshot(services.plan),
+        benefits=snapshot(services.plan) if services.plan else None,
     )
