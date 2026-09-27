@@ -1,8 +1,8 @@
 """Generate the one-click demo files served at ``GET /api/samples/{name}``.
 
-Run from ``backend/`` with ``python -m scripts.make_sample_files``. The sample
-bill matches the offline sample analysis in ``app/services/gemini.py`` so the
-demo tells the same $565 story with or without live Gemini.
+Run from ``backend/`` with ``python -m scripts.make_sample_files``. Each sample
+bill matches the saved analysis next to it (``sample-bill.json``,
+``surprise-bill.json``) so the demo tells the same story with or without live Gemini.
 """
 
 from __future__ import annotations
@@ -26,6 +26,24 @@ SAMPLE_BILL = [
     "Amount due from patient: $565.00",
 ]
 
+SURPRISE_BILL = [
+    "SHOW-ME ANESTHESIA ASSOCIATES - PATIENT STATEMENT",
+    "Patient: Jordan Tiger          Member ID: ACM-2026-0412",
+    "Plan: ACME Corp Health Plan (2026) - PPO",
+    "Date of service: 09/03/2026    Procedure: outpatient knee arthroscopy",
+    "Place of service: Columbia Regional Hospital Surgery Center (in-network with your plan)",
+    "Provider network status: OUT-OF-NETWORK anesthesiologist",
+    "Scheduled surgery, not an emergency. Patient did not choose the anesthesiologist.",
+    "",
+    "Line  Code   Description                              Billed",
+    "1     01400  Anesthesia for knee joint surgery        $2,100.00",
+    "2     64447  Femoral nerve block injection            $600.00",
+    "",
+    "Total charges: $2,700.00",
+    "Insurance payment: $0.00 (provider is out of network)",
+    "Amount due from patient: $2,700.00",
+]
+
 SAMPLE_BENEFITS = [
     "TIGER HEALTH SILVER PPO - SUMMARY OF BENEFITS AND COVERAGE (2026)",
     "Individual in-network deductible: $3,000 per plan year.",
@@ -42,6 +60,7 @@ SAMPLE_BENEFITS = [
 def main() -> None:
     SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
     (SAMPLES_DIR / "sample-bill.pdf").write_bytes(make_text_pdf(SAMPLE_BILL))
+    (SAMPLES_DIR / "surprise-bill.pdf").write_bytes(make_text_pdf(SURPRISE_BILL))
     (SAMPLES_DIR / "sample-benefits.pdf").write_bytes(make_text_pdf(SAMPLE_BENEFITS))
     print(f"Wrote sample files to {SAMPLES_DIR}")
 
