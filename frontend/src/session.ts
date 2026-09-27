@@ -1,17 +1,38 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { API_BASE_URL } from "./apiBase";
+import type { HealthResponse } from "./types";
 
-const url = import.meta.env.VITE_SUPABASE_URL?.trim();
-const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
+const UNREACHABLE =
+  "Cannot reach the backend. Check that FastAPI is running and the API address is correct.";
 
+// The backend owns the Supabase settings, so the web app can never disagree with it.
 // Null when the backend runs without Supabase (single local member, no sign-in).
-const supabase = url && key ? createClient(url, key) : null;
+let client: Promise<SupabaseClient | null> | null = null;
+
+function supabaseClient(): Promise<SupabaseClient | null> {
+  client ??= (async () => {
+    const response = await fetch(`${API_BASE_URL}/api/health`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!response.ok) throw new Error(UNREACHABLE);
+    const health = (await response.json()) as HealthResponse;
+    const url = health.supabase_url;
+    const key = health.supabase_publishable_key;
+    return url && key ? createClient(url, key) : null;
+  })().catch(() => {
+    client = null;
+    throw new Error(UNREACHABLE);
+  });
+  return client;
+}
 
 let signingIn: Promise<string> | null = null;
 
-function signInAnonymously(): Promise<string> {
+function signInAnonymously(supabase: SupabaseClient): Promise<string> {
   // Parallel first requests must share one anonymous user, not create several.
   signingIn ??= (async () => {
-    const { data, error } = await supabase!.auth.signInAnonymously();
+    const { data, error } = await supabase.auth.signInAnonymously();
     if (error || !data.session)
       throw new Error(
         "We couldn't start your private session. Refresh the page to try again.",
@@ -25,20 +46,22 @@ function signInAnonymously(): Promise<string> {
 
 /** The visitor's access token, signing them in anonymously on first use. */
 export async function accessToken(): Promise<string | null> {
+  const supabase = await supabaseClient();
   if (!supabase) return null;
   // getSession refreshes an expired token when the saved refresh token allows.
   const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? signInAnonymously();
+  return data.session?.access_token ?? signInAnonymously(supabase);
 }
 
 /**
  * Recover from a token the backend rejected. Renewing keeps the same anonymous
  * user and their saved data; only a session that can't be renewed is dropped.
+ * Resolves true when sessions are in use, so the request is worth retrying.
  */
-export async function resetSession(): Promise<void> {
-  if (!supabase) return;
+export async function resetSession(): Promise<boolean> {
+  const supabase = await supabaseClient();
+  if (!supabase) return false;
   const { error } = await supabase.auth.refreshSession();
   if (error) await supabase.auth.signOut({ scope: "local" });
+  return true;
 }
-
-export const sessionsEnabled = supabase !== null;
