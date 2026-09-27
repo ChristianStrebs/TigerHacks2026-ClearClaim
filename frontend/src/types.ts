@@ -31,6 +31,11 @@ export interface CostEstimate {
   explanation: string;
 }
 
+export interface ChatTurn {
+  role: "user" | "assistant";
+  text: string;
+}
+
 export interface ChatResponse {
   answer: string;
   sources: Source[];
