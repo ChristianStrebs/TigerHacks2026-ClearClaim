@@ -67,6 +67,9 @@ member should personally pay for that line under the plan summary provided.
   empty string only when the charge is correct.
 - overcharge_flags lists one plain-language sentence per flagged line.
 - Stay consistent: if the summary says a charge should be covered, that line must be flagged.
+- Set is_medical_bill to false when the file is not a medical bill, statement, or EOB (for
+  example a recipe, a store receipt, a benefits booklet, or a random photo); then return no
+  line items and a total of 0.
 Write the summary in plain language (8th-grade reading level). Respond ONLY with JSON."""
 
 _CHAT_INSTRUCTION = """You are ClearClaim, a friendly healthcare benefits copilot for employees.
@@ -404,6 +407,7 @@ class GeminiService:
 _EOB_SCHEMA = {
     "type": "object",
     "properties": {
+        "is_medical_bill": {"type": "boolean"},
         "provider": {"type": "string"},
         "total_billed": {"type": "number"},
         "line_items": {
@@ -424,7 +428,7 @@ _EOB_SCHEMA = {
         "overcharge_flags": {"type": "array", "items": {"type": "string"}},
         "summary": {"type": "string"},
     },
-    "required": ["total_billed", "line_items", "overcharge_flags", "summary"],
+    "required": ["is_medical_bill", "total_billed", "line_items", "overcharge_flags", "summary"],
 }
 
 _PLAN_SCHEMA = {
