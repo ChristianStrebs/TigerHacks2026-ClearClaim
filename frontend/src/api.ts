@@ -109,7 +109,10 @@ export function uploadForm(file: File): FormData {
 export const getHealth = () => request<HealthResponse>("/api/health");
 export const getPlan = () => request<PlanResponse>("/api/plan");
 export const getSamples = () => request<SampleFile[]>("/api/samples");
-export const resetPlan = () => jsonPost<PlanResponse>("/api/plan/reset");
+export const chooseSamplePlan = () =>
+  jsonPost<PlanResponse>("/api/plan/sample");
+export const clearPlan = () => jsonPost<PlanResponse>("/api/plan/clear");
+export const getScans = () => request<EobScanResponse[]>("/api/eob/scans");
 export const submitPlanText = (title: string, text: string) =>
   jsonPost<PlanResponse>("/api/plan/text", { title, text });
 export const uploadPlan = (file: File) =>
