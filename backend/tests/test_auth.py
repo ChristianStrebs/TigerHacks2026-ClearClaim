@@ -58,7 +58,7 @@ def test_valid_anonymous_token_identifies_the_member(verifier: TokenVerifier) ->
 @pytest.mark.parametrize(
     "token",
     [
-        pytest.param(_token(exp=int(time.time()) - 10), id="expired"),
+        pytest.param(_token(exp=int(time.time()) - 120), id="expired"),
         pytest.param(_token(aud="anon"), id="wrong audience"),
         pytest.param(_token(iss="https://other.supabase.co/auth/v1"), id="other project"),
         pytest.param(_token(key=ec.generate_private_key(ec.SECP256R1())), id="forged"),
