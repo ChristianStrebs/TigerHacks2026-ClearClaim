@@ -1,4 +1,4 @@
-"""Bill scans are remembered so the member can come back to them and ask about them."""
+﻿"""Bill scans are remembered so the member can come back to them and ask about them."""
 
 from __future__ import annotations
 
@@ -40,7 +40,8 @@ def test_unknown_scan_is_404(client: TestClient) -> None:
 
 
 def test_failed_scan_is_not_saved(client: TestClient) -> None:
-    resp = client.post("/api/eob/scan", files={"file": ("x.png", b"not the sample", "image/png")})
+    photo = b"\x89PNG\r\n\x1a\nnot the sample"
+    resp = client.post("/api/eob/scan", files={"file": ("x.png", photo, "image/png")})
 
     assert resp.status_code == 503
     assert client.get("/api/eob/scans").json() == []
