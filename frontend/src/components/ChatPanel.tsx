@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { resetPlan, scanEob, sendChat, uploadPlan } from "../api";
 import { currency } from "../format";
-import type { CostEstimate, EobScanResponse, PlanResponse, Source } from "../types";
+import type {
+  ChatTurn,
+  CostEstimate,
+  EobScanResponse,
+  PlanResponse,
+  Source,
+} from "../types";
 import { BillResult } from "./BillResult";
 import { Composer, type SampleKind } from "./Composer";
 import { Markdown } from "./Markdown";
@@ -42,6 +48,32 @@ async function loadSample(kind: SampleKind): Promise<File> {
   const res = await fetch(`${import.meta.env.VITE_API_BASE_URL ?? ""}/api/samples/${name}`);
   if (!res.ok) throw new Error("Couldn't load the sample file.");
   return new File([await res.blob()], name, { type: "application/pdf" });
+}
+
+const MAX_HISTORY_TURNS = 20;
+
+function chatHistory(turns: Turn[]): ChatTurn[] {
+  const history: ChatTurn[] = [];
+  for (const turn of turns) {
+    switch (turn.kind) {
+      case "question":
+        history.push({ role: "user", text: turn.text });
+        break;
+      case "answer":
+        history.push({ role: "assistant", text: turn.text });
+        break;
+      case "attachment":
+      case "plan":
+      case "bill":
+      case "error":
+        break;
+      default: {
+        const unhandled: never = turn;
+        return unhandled;
+      }
+    }
+  }
+  return history.slice(-MAX_HISTORY_TURNS);
 }
 
 function errorMessage(e: unknown): string {
@@ -177,7 +209,7 @@ export function ChatPanel({ initialPlan }: Props) {
 
   const ask = (question: string) =>
     run("Thinking…", { kind: "question", text: question }, async () => {
-      const res = await sendChat(question);
+      const res = await sendChat(question, chatHistory(turns));
       return {
         kind: "answer",
         text: res.answer,
