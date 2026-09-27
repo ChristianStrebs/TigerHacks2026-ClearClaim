@@ -5,9 +5,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 PlanField = Literal["deductible_total", "coinsurance_rate", "oop_max"]
+
+# Match the column limits in supabase/migrations so valid requests always save.
+MAX_NAME_CHARS = 300
+MAX_MESSAGE_CHARS = 4000
+MAX_PLAN_TEXT_CHARS = 200_000
 
 
 class HealthResponse(BaseModel):
@@ -39,8 +44,15 @@ class BenefitsSnapshot(BaseModel):
 
 
 class PlanTextRequest(BaseModel):
-    title: str = Field(default="Pasted policy", min_length=1)
-    text: str = Field(..., min_length=1, description="Raw policy text to read and index.")
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    title: str = Field(default="Pasted policy", min_length=1, max_length=MAX_NAME_CHARS)
+    text: str = Field(
+        ...,
+        min_length=1,
+        max_length=MAX_PLAN_TEXT_CHARS,
+        description="Raw policy text to read and index.",
+    )
 
 
 class PlanResponse(BaseModel):
@@ -64,12 +76,16 @@ class CostEstimate(BaseModel):
 
 
 class ChatTurn(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     role: Literal["user", "assistant"]
-    text: str = Field(..., min_length=1, max_length=4000)
+    text: str = Field(..., min_length=1, max_length=MAX_MESSAGE_CHARS)
 
 
 class ChatRequest(BaseModel):
-    message: str = Field(..., min_length=1)
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    message: str = Field(..., min_length=1, max_length=MAX_MESSAGE_CHARS)
     history: list[ChatTurn] = Field(
         default_factory=list,
         max_length=20,
