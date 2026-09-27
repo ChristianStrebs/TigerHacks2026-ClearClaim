@@ -26,8 +26,12 @@ export class ApiError extends Error {
   }
 }
 
-async function authHeaders(init: RequestInit): Promise<Headers> {
+// Public backend routes; they must keep working even if sign-in fails.
+const PUBLIC_PATHS = ["/api/health", "/api/samples"];
+
+async function authHeaders(path: string, init: RequestInit): Promise<Headers> {
   const headers = new Headers(init.headers);
+  if (PUBLIC_PATHS.some((prefix) => path.startsWith(prefix))) return headers;
   try {
     const token = await accessToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -48,7 +52,7 @@ async function request<T>(
   read: (response: Response) => Promise<T> = (response) => response.json(),
   retried = false,
 ): Promise<T> {
-  const headers = await authHeaders(init);
+  const headers = await authHeaders(path, init);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
