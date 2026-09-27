@@ -94,7 +94,7 @@ def test_eob_scan_falls_back_when_vision_fails(live_but_broken: None) -> None:
     result = service.analyze_eob(b"img", "image/png", "")
 
     assert result.live is False
-    assert result.data["line_items"]
+    assert result.data == {}
 
 
 def test_startup_embedding_failure_switches_app_to_demo_mode(live_but_broken: None) -> None:
