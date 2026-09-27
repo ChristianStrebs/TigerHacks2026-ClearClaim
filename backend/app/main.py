@@ -5,17 +5,21 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
+from app.auth import TokenVerifier
 from app.config import get_settings
 from app.dependencies import AppServices
-from app.routers import chat, documents, eob, health, plan, samples
+from app.routers import chat, eob, health, plan, samples
 from app.services.gemini import GeminiService, GeminiUnavailableError
-from app.services.vector_store import create_vector_store
+from app.services.storage import StorageError, create_storage
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("clearclaim")
+
+STORAGE_DOWN_DETAIL = "We couldn't reach your saved data. Please try again in a moment."
 
 
 def _check_embeddings(services: AppServices) -> None:
@@ -25,8 +29,8 @@ def _check_embeddings(services: AppServices) -> None:
     try:
         services.gemini.embed_query("ClearClaim startup check")
     except GeminiUnavailableError as exc:
-        # The index must use one embedding space, so a startup failure switches the
-        # whole app to demo mode rather than mixing live and offline vectors.
+        # Vectors from different spaces can't be compared, so a startup failure switches
+        # the whole app to demo mode rather than mixing live and offline vectors.
         services.gemini.disable(str(exc))
 
 
@@ -36,12 +40,24 @@ async def lifespan(app: FastAPI):
     services = AppServices(
         settings=settings,
         gemini=GeminiService(settings),
-        vector_store=create_vector_store(settings),
+        storage=create_storage(settings),
+        verifier=TokenVerifier(settings) if settings.supabase_enabled else None,
     )
     app.state.services = services
     _check_embeddings(services)
-    logger.info("Ready; waiting for the member to choose the sample plan or their own")
-    yield
+    logger.info(
+        "Ready with %s storage; waiting for members to choose a plan",
+        services.storage.backend_name,
+    )
+    try:
+        yield
+    finally:
+        services.storage.close()
+
+
+async def _storage_unavailable(_request: Request, exc: Exception) -> JSONResponse:
+    logger.error("Storage request failed: %s", exc)
+    return JSONResponse(status_code=503, content={"detail": STORAGE_DOWN_DETAIL})
 
 
 def create_app() -> FastAPI:
@@ -59,9 +75,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_exception_handler(StorageError, _storage_unavailable)
     app.include_router(health.router)
     app.include_router(chat.router)
-    app.include_router(documents.router)
     app.include_router(eob.router)
     app.include_router(plan.router)
     app.include_router(samples.router)
