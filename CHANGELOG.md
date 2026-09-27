@@ -98,6 +98,15 @@ Not yet merged into `main`.
   an Email link that opens the letter in your mail app. The checklist can be ticked off, and
   a note says it's general information, not legal advice. It shows whether Gemini or the
   template wrote the kit.
+- **Chat uses tools.** Gemini now decides which of four tools a question needs: search the
+  plan, read the scanned bills, calculate a cost, or check patient protections. It can use
+  several at once, for up to 4 rounds per question. The calculator does all the math, so
+  `cost_estimate` and the dollar figures in the answer always match. `ChatResponse` has a new
+  `steps` list of `{tool, label, result}` (for example "Calculated your cost for $3,000" and
+  "You'd pay about $300"), and saved chat history keeps it. `steps` is empty when chat
+  answers the previous single-shot way, which it still does when the AI is off, when every
+  model fails, or when tools run past 4 rounds. A tool-using answer takes 2 or more Gemini
+  requests, so the free tier's daily limit runs out sooner.
 - **Optional hosting configs.** `render.yaml` (backend on Render) and `frontend/vercel.json`
   (frontend on Vercel), with steps in the README's "Deploy (optional)" section. The app
   still runs fully locally without them.
