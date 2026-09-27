@@ -31,9 +31,14 @@ export async function accessToken(): Promise<string | null> {
   return data.session?.access_token ?? signInAnonymously();
 }
 
-/** Drop a session the backend rejected; the next request signs in again. */
+/**
+ * Recover from a token the backend rejected. Renewing keeps the same anonymous
+ * user and their saved data; only a session that can't be renewed is dropped.
+ */
 export async function resetSession(): Promise<void> {
-  await supabase?.auth.signOut({ scope: "local" });
+  if (!supabase) return;
+  const { error } = await supabase.auth.refreshSession();
+  if (error) await supabase.auth.signOut({ scope: "local" });
 }
 
 export const sessionsEnabled = supabase !== null;
