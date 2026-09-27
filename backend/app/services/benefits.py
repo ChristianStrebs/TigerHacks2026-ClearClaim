@@ -191,11 +191,9 @@ def extract_plan_numbers_offline(text: str) -> dict:
     return extracted
 
 
-def snapshot(plan: PlanProfile, bills_owed: float = 0.0) -> BenefitsSnapshot:
-    """The plan's numbers, with what the member owes on scanned bills counted toward the
-    deductible. Payments only count until the deductible is met, so the running total is
-    simply capped, whatever order the bills were scanned in."""
-    met = min(plan.deductible_met + max(bills_owed, 0.0), plan.deductible_total)
+def snapshot(plan: PlanProfile, from_bills: float = 0.0) -> BenefitsSnapshot:
+    """The plan's numbers, with what scanned bills paid toward the deductible added in."""
+    met = min(plan.deductible_met + max(from_bills, 0.0), plan.deductible_total)
     met = round(max(met, plan.deductible_met), 2)
     return BenefitsSnapshot(
         deductible_total=plan.deductible_total,
@@ -207,7 +205,7 @@ def snapshot(plan: PlanProfile, bills_owed: float = 0.0) -> BenefitsSnapshot:
     )
 
 
-def plan_response(plan: PlanProfile | None, bills_owed: float = 0.0) -> PlanResponse:
+def plan_response(plan: PlanProfile | None, from_bills: float = 0.0) -> PlanResponse:
     if plan is None:
         return PlanResponse(
             plan_name=None, source="none", benefits=None, summary="", demo_mode=False
@@ -215,7 +213,7 @@ def plan_response(plan: PlanProfile | None, bills_owed: float = 0.0) -> PlanResp
     return PlanResponse(
         plan_name=plan.name,
         source=plan.source,
-        benefits=snapshot(plan, bills_owed),
+        benefits=snapshot(plan, from_bills),
         summary=plan.summary,
         demo_mode=not plan.summary_live,
     )
