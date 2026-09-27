@@ -1,0 +1,24 @@
+# Render Blueprint for the FastAPI backend. Secrets marked sync: false are entered
+# in the Render dashboard when the Blueprint is created; they never live in git.
+services:
+  - type: web
+    name: clearclaim-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    autoDeploy: false
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.7
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        value: https://wopyaphsiuftdndyrhsg.supabase.co
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      # The deployed frontend's exact origin, e.g. https://clearclaim.vercel.app
+      - key: CORS_ORIGINS
+        sync: false
