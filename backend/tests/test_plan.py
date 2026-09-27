@@ -9,6 +9,7 @@ from app.config import Settings
 from app.routers.plan import NOT_BENEFITS_DETAIL
 from app.services.benefits import plan_from_extraction
 from app.services.gemini import PlanResult
+from app.services.storage import MemberStore
 from tests.pdf_utils import make_text_pdf
 
 _FULL_PLAN = [
@@ -86,7 +87,9 @@ def test_reset_restores_sample_plan(client: TestClient) -> None:
     assert chat["sources"][0]["document"] == body["plan_name"]
 
 
-def test_pasted_policy_returns_offline_summary(client: TestClient) -> None:
+def test_pasted_policy_returns_offline_summary(
+    client: TestClient, local_store: MemberStore
+) -> None:
     text = (
         "ACME Corp Health Plan. Individual deductible: $2,000 per year. "
         "After the deductible you pay 20% coinsurance. "
@@ -94,8 +97,6 @@ def test_pasted_policy_returns_offline_summary(client: TestClient) -> None:
         "Preventive care is covered at 100% with no deductible. "
         "Watch out: knee surgery needs prior authorization or a $500 penalty. "
     ) * 3
-    before = client.get("/api/health").json()["indexed_chunks"]
-
     resp = client.post("/api/plan/text", json={"title": "ACME paste", "text": text})
 
     assert resp.status_code == 200
@@ -104,10 +105,9 @@ def test_pasted_policy_returns_offline_summary(client: TestClient) -> None:
     assert body["summary"]
     assert "Deductible" in body["summary"] or "deductible" in body["summary"].lower()
     assert body["benefits"]["deductible_total"] == 2000
-    after = client.get("/api/health").json()
-    assert after["indexed_chunks"] >= 1
-    assert after["benefits"]["deductible_total"] == 2000
-    assert before > 0
+    saved = local_store.get_plan()
+    assert saved is not None and saved.profile.name == "ACME paste"
+    assert local_store.chunk_count() >= 1
 
 
 def test_paste_without_numbers_is_honest_about_demo_values(client: TestClient) -> None:
