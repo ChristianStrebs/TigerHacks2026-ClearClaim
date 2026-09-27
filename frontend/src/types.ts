@@ -31,11 +31,6 @@ export interface CostEstimate {
   explanation: string;
 }
 
-export interface ChatTurn {
-  role: "user" | "assistant";
-  text: string;
-}
-
 export interface ChatResponse {
   answer: string;
   sources: Source[];
@@ -64,6 +59,7 @@ export interface EobScanResponse {
 }
 
 export interface HealthResponse {
+  benefits: BenefitsSnapshot;
   status: string;
   version: string;
   gemini_enabled: boolean;
@@ -72,4 +68,16 @@ export interface HealthResponse {
   chat_model: string;
   embed_model: string;
   indexed_chunks: number;
+}
+
+export interface SampleFile {
+  name: string;
+  kind: "bill" | "benefits";
+  description: string;
+  url: string;
+}
+
+export interface ChatTurn {
+  role: "user" | "assistant";
+  text: string;
 }
