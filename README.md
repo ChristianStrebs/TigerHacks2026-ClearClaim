@@ -1,29 +1,41 @@
 # ClearClaim — Healthcare Benefits Copilot
 
-> TigerHacks 2026 · Medical / Health track · MLH "Best Use of Gemini API"
+> TigerHacks 2026 · Financial Freedom in Healthcare track · MLH "Best Use of Gemini API"
 
 ClearClaim is an AI-powered **healthcare benefits copilot**. It turns dense,
-jargon-filled insurance policies into plain-English answers and flags likely
-overcharges on medical bills — focused strictly on the **administrative and
-financial** side of healthcare (no clinical/diagnostic advice).
+jargon-filled insurance policies into plain-English answers, flags likely
+overcharges on medical bills, and helps you fix them. It sticks to the
+**administrative and financial** side of healthcare (no clinical or diagnostic advice).
 
 ## Core features
 
-1. **Contextual RAG chat** — Ask questions like _"How much will my knee surgery
-   cost?"_. ClearClaim retrieves the relevant parts of your benefits PDF and uses
-   your deductible status to compute an out-of-pocket estimate.
-2. **EOB / bill scanner** — Upload a photo of an Explanation of Benefits or a
-   medical bill. Gemini vision extracts the line items, checks them against your
-   plan, and flags duplicates and overcharges.
+1. **Your plan, read for you.** Upload a benefits PDF or photo, paste the text, or try
+   the sample plan. Gemini pulls out the deductible, coinsurance, and out-of-pocket max
+   and writes a plain-language summary.
+2. **Bill scanner.** Upload a medical bill or Explanation of Benefits. Gemini vision
+   reads each line, checks it against your plan, and flags duplicates and overcharges.
+   You see what you should really owe, and saved bills count toward your deductible.
+3. **Your rights.** Plain rules (not the AI) check each bill against patient
+   protections like the No Surprises Act and free preventive care, with a link to the
+   official source.
+4. **Fix this bill.** A dispute letter, a phone script for the billing office, and a
+   checklist, ready to copy, download, or email. It still works from a template when
+   the AI is unavailable.
+5. **Chat that uses tools.** Ask things like _"What would a $3,000 MRI cost me?"_.
+   Gemini decides whether to search your plan, read your bill, check your rights, or
+   run ClearClaim's cost calculator. Each answer shows a "How I answered" list, and
+   the calculator does all the math.
+
+Rights and dispute features are general information, not legal advice.
 
 ## Tech stack
 
 | Layer     | Choice                                                      |
 | --------- | ---------------------------------------------------------- |
 | Frontend  | React 19 + TypeScript + Vite                               |
-| Backend   | Python 3.12 + FastAPI                                      |
+| Backend   | Python 3.13 + FastAPI                                      |
 | AI        | Google Gemini (`gemini-3.8-flash`, `gemini-embedding-001`) |
-| Vector DB | Supabase / pgvector (with an in-memory fallback)           |
+| Data      | Supabase: Postgres, pgvector, anonymous sign-in, row level security (in-memory fallback) |
 
 The current Gemini models are read from env vars, so upgrading is a one-line
 change (see `backend/.env.example`).
@@ -31,23 +43,25 @@ change (see `backend/.env.example`).
 ## Demo mode (no secrets required)
 
 The app is **fully runnable with zero credentials**. When `GEMINI_API_KEY` is
-not set, the backend uses deterministic offline responses (hashed embeddings +
-canned answers) and an in-memory vector store, so the whole UI is clickable for
-development and demos. The header shows a **Demo mode** / **Gemini live** badge
-so it is always clear which mode is active.
+not set, the backend uses deterministic offline responses (hashed embeddings,
+canned answers, and saved readings of the sample bills), and without Supabase it
+keeps data in memory, so the whole UI is clickable for development and demos. The
+header shows **AI available** or **Offline AI**, and each answer says whether Gemini
+wrote it, so it's always clear which mode is active.
 
 ## Project layout
 
 ```
 backend/            FastAPI service
   app/
-    routers/        /api/health, /api/chat, /api/documents, /api/eob
-    services/       Gemini client, vector store, ingestion, benefits math
-    data/           bundled sample benefits policy (auto-seeded)
+    routers/        /api/health, /api/chat, /api/eob, /api/plan, /api/samples
+    services/       Gemini client, chat agent, storage, rights rules, dispute kit,
+                    bill and benefits math
+    data/           sample plan text, patient rights rules, sample PDFs
   tests/            pytest suite (runs fully offline)
 frontend/           Vite + React + TypeScript client
 supabase/
-  migrations/       pgvector schema + match_documents RPC (RLS enabled)
+  migrations/       per-member tables, pgvector search, row level security
 .cursor/            Cloud Agent environment config + install script
 ```
 
@@ -121,18 +135,27 @@ demo to wake it.
 
 ## API reference
 
-| Method | Path                    | Purpose                                  |
-| ------ | ----------------------- | ---------------------------------------- |
-| GET    | `/api/health`           | Service status, active models, mode      |
-| POST   | `/api/chat`             | RAG answer + sources + cost estimate     |
-| POST   | `/api/documents`        | Ingest raw policy text                   |
-| POST   | `/api/documents/upload` | Ingest a policy PDF                       |
-| POST   | `/api/eob/scan`         | Analyze an uploaded bill/EOB image or PDF |
-| GET    | `/api/plan`             | Active plan: numbers, summary, demo flags |
-| POST   | `/api/plan/upload`      | Replace the plan from a benefits PDF/photo |
-| POST   | `/api/plan/reset`       | Go back to the sample plan               |
-| GET    | `/api/samples`          | List demo PDFs (bill, benefits)          |
-| GET    | `/api/samples/{name}`   | Download a demo PDF                      |
+| Method | Path                              | Purpose                                      |
+| ------ | --------------------------------- | -------------------------------------------- |
+| GET    | `/api/health`                     | Service status, active models, storage mode  |
+| POST   | `/api/chat`                       | Answer with sources, cost estimate, and steps |
+| GET    | `/api/chat/history`               | Saved conversation for the current plan      |
+| GET    | `/api/plan`                       | Active plan: numbers, summary, demo flags    |
+| POST   | `/api/plan/sample`                | Use the sample plan                          |
+| POST   | `/api/plan/text`                  | Replace the plan from pasted text            |
+| POST   | `/api/plan/upload`                | Replace the plan from a benefits PDF or photo |
+| POST   | `/api/plan/clear`                 | Remove the plan and everything saved with it |
+| POST   | `/api/eob/scan`                   | Review a bill or EOB image or PDF            |
+| GET    | `/api/eob/scans`                  | The latest 5 saved bill reviews              |
+| GET    | `/api/eob/scans/{scan_id}`        | One saved bill review                        |
+| POST   | `/api/eob/scans/{scan_id}/dispute` | Dispute letter, call script, and checklist  |
+| DELETE | `/api/eob/scans/{scan_id}`        | Remove one bill                              |
+| DELETE | `/api/eob/scans`                  | Remove every bill                            |
+| GET    | `/api/samples`                    | List demo PDFs (bills, benefits)             |
+| GET    | `/api/samples/{name}`             | Download a demo PDF                          |
+
+When Supabase is configured, every route except `/api/health` and `/api/samples` needs
+`Authorization: Bearer <Supabase access token>`.
 
 Request/response shapes, mobile integration notes, and what changed recently are in
 [CHANGELOG.md](CHANGELOG.md).
@@ -146,7 +169,9 @@ cd frontend && pnpm run build       # type-check + production build
 
 ## Security notes
 
-- The Supabase `service_role` key is server-only and never shipped to the browser.
-- The `documents` table has Row Level Security enabled; browser clients cannot
-  read benefits content directly.
-- ClearClaim provides administrative/financial guidance only — not medical advice.
+- No Supabase `service_role` key is used anywhere. The backend forwards each member's
+  own access token, so row level security keeps every visitor's plan, bills, and chats
+  private.
+- Secrets live in `backend/.env` and `frontend/.env.local`, which git ignores.
+- ClearClaim provides administrative and financial guidance only: not medical advice,
+  and its rights and dispute features are not legal advice.
