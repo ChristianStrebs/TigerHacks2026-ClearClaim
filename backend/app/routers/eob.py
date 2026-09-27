@@ -1,12 +1,15 @@
-"""EOB / medical bill scanner endpoint (Gemini vision)."""
+"""EOB / medical bill scanner (Gemini vision) and the member's recent saved scans."""
 
 from __future__ import annotations
 
 import hashlib
 import logging
+import uuid
+from datetime import UTC, datetime
 from functools import lru_cache
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from pydantic import ValidationError
 
 from app.dependencies import AppServices, get_services, require_plan
@@ -94,7 +97,7 @@ async def scan_eob(
     file: UploadFile = File(...),
     services: AppServices = Depends(get_services),
 ) -> EobScanResponse:
-    require_plan(services)
+    plan = require_plan(services)
     if file.content_type not in _ALLOWED_IMAGE_TYPES:
         raise HTTPException(
             status_code=415,
@@ -106,10 +109,13 @@ async def scan_eob(
     if len(data) > _MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="File is too large (15 MB max).")
 
-    result = services.gemini.analyze_eob(
+    # Gemini calls block, so keep them off the event loop.
+    policy_context = await run_in_threadpool(_policy_context, services)
+    result = await run_in_threadpool(
+        services.gemini.analyze_eob,
         image_bytes=data,
         mime_type=file.content_type or "image/png",
-        policy_context=_policy_context(services),
+        policy_context=policy_context,
     )
     # The offline result describes the sample bill, so never pass it off as the member's own.
     if not result.live and not _is_sample_bill(data):
@@ -127,7 +133,11 @@ async def scan_eob(
         for item in line_items
         if item.flag == _FULLY_COVERED_FLAG
     ]
-    return EobScanResponse(
+    scan = EobScanResponse(
+        scan_id=uuid.uuid4().hex,
+        file_name=file.filename or "bill",
+        scanned_at=datetime.now(UTC),
+        plan_name=plan.name,
         provider=result.data.get("provider") or None,
         total_billed=float(result.data.get("total_billed") or 0.0),
         line_items=line_items,
@@ -136,3 +146,26 @@ async def scan_eob(
         summary=str(result.data.get("summary") or ""),
         demo_mode=not result.live,
     )
+    # Don't save a scan checked against a plan the member has since replaced.
+    if services.plan is plan:
+        services.scans.append(scan)
+    return scan
+
+
+@router.get("/scans", response_model=list[EobScanResponse])
+def list_scans(services: AppServices = Depends(get_services)) -> list[EobScanResponse]:
+    """Saved scans for the current plan, newest first."""
+    return list(reversed(services.scans))
+
+
+@router.get("/scans/{scan_id}", response_model=EobScanResponse)
+def get_scan(scan_id: str, services: AppServices = Depends(get_services)) -> EobScanResponse:
+    for scan in services.scans:
+        if scan.scan_id == scan_id:
+            return scan
+    raise HTTPException(status_code=404, detail="That bill scan isn't saved anymore.")
+
+
+@router.delete("/scans", status_code=204)
+def clear_scans(services: AppServices = Depends(get_services)) -> None:
+    services.scans.clear()
