@@ -472,6 +472,44 @@ button:active {
   margin-left: auto;
   color: #aca7b0;
 }
+.choose-plan {
+  margin-top: 22px;
+}
+.choose-plan h2 {
+  font-size: 17px;
+  letter-spacing: -0.5px;
+  font-weight: 750;
+}
+.choose-plan > p {
+  color: #91909a;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-top: 6px;
+}
+.choose-plan .question-card {
+  margin-top: 12px;
+}
+.mini-icon.own {
+  background: #ffedf0;
+  color: #f04858;
+}
+.choose-detail {
+  display: block;
+  color: #91909a;
+  font-size: 11px;
+  margin-top: 3px;
+}
+.bill-context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f1effb;
+  color: #5f5690;
+  border-radius: 14px;
+  padding: 10px 12px;
+  font-size: 12px;
+  margin-top: 12px;
+}
 .footnote {
   font-size: 11px;
   line-height: 1.6;
