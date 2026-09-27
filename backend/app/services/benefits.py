@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import re
 import math
+import re
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -16,7 +16,8 @@ _OOP_MAX = re.compile(
     r"out[- ]of[- ]pocket\s+(?:max(?:imum)?|limit)[^$\n]{0,60}?\$\s?(\d[\d,]*)", re.IGNORECASE
 )
 _COINSURANCE = re.compile(
-    r"(?<![\d.])(\d{1,3}(?:\.\d+)?)\s*%\s+coinsurance|coinsurance[^%\n]{0,40}?(\d{1,3}(?:\.\d+)?)\s*%",
+    r"(?<![\d.])(\d{1,3}(?:\.\d+)?)\s*%\s+coinsurance"
+    r"|coinsurance[^%\n]{0,40}?(\d{1,3}(?:\.\d+)?)\s*%",
     re.IGNORECASE,
 )
 
@@ -24,9 +25,11 @@ SAMPLE_PLAN_NAME = "ACME Corp Health Plan (2026)"
 
 _SAMPLE_SUMMARY = "\n".join(
     [
-        "- **Deductible:** ${deductible:,.2f} a year. You pay this first, before the plan shares costs.",
-        "- **Coinsurance:** after the deductible, you pay {member_percent:g}% and the plan pays {plan_percent:g}%.",
-        "- **Out-of-pocket max:** ${oop_max:,.2f} a year. After that, covered care is free.",
+        "- **Deductible:** ${deductible:,.0f} a year. "
+        "You pay this first, before the plan shares costs.",
+        "- **Coinsurance:** after the deductible, you pay {member_percent:g}% "
+        "and the plan pays {plan_percent:g}%.",
+        "- **Out-of-pocket max:** ${oop_max:,.0f} a year. After that, covered care is free.",
         "- **Free preventive care:** wellness visits, shots, and screenings cost $0.",
         "- **Copays:** $25 primary care, $50 specialist, $10 generic drugs.",
         "- **Watch out:** knee surgery and similar procedures need prior approval, "
