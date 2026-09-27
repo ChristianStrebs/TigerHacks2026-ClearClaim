@@ -642,22 +642,6 @@ button:active {
   border-top: 1px solid #efedf1;
   background: #f8f8fa;
 }
-.cost-field {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: #aaa0aa;
-  margin-bottom: 9px;
-  padding-left: 7px;
-}
-.cost-field input {
-  border: 0;
-  background: transparent;
-  font-size: 12px;
-  width: 100%;
-  color: #726978;
-  padding: 3px;
-}
 .message-field {
   display: flex;
   padding: 6px;
