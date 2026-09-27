@@ -15,10 +15,13 @@ export interface BenefitsSnapshot {
   demo_fields: PlanField[];
 }
 
+/** "none" until the visitor picks sample data or submits their own plan. */
+export type PlanSource = "none" | "demo" | "document";
+
 export interface PlanResponse {
-  plan_name: string;
-  source: "demo" | "document";
-  benefits: BenefitsSnapshot;
+  plan_name: string | null;
+  source: PlanSource;
+  benefits: BenefitsSnapshot | null;
   summary: string;
   demo_mode: boolean;
 }
@@ -36,6 +39,8 @@ export interface ChatResponse {
   sources: Source[];
   benefits: BenefitsSnapshot;
   cost_estimate: CostEstimate | null;
+  /** The saved bill scan the answer could draw on, if any. */
+  bill_scan_id: string | null;
   demo_mode: boolean;
 }
 
@@ -49,6 +54,10 @@ export interface EobLineItem {
 }
 
 export interface EobScanResponse {
+  scan_id: string;
+  file_name: string;
+  scanned_at: string;
+  plan_name: string;
   provider: string | null;
   total_billed: number;
   line_items: EobLineItem[];
@@ -59,7 +68,7 @@ export interface EobScanResponse {
 }
 
 export interface HealthResponse {
-  benefits: BenefitsSnapshot;
+  benefits: BenefitsSnapshot | null;
   status: string;
   version: string;
   gemini_enabled: boolean;
