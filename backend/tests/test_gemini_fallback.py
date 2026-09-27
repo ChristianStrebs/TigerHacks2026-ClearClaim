@@ -97,12 +97,11 @@ def test_eob_scan_falls_back_when_vision_fails(live_but_broken: None) -> None:
     assert result.data["line_items"]
 
 
-def test_startup_indexing_failure_switches_app_to_demo_mode(live_but_broken: None) -> None:
+def test_startup_embedding_failure_switches_app_to_demo_mode(live_but_broken: None) -> None:
     with TestClient(create_app()) as client:
-        health = client.get("/api/health").json()
-        assert health["gemini_enabled"] is False
-        assert health["indexed_chunks"] > 0
+        assert client.get("/api/health").json()["gemini_enabled"] is False
 
+        assert client.post("/api/plan/sample").status_code == 200
         chat = client.post("/api/chat", json={"message": "What is my deductible?"})
         assert chat.status_code == 200
         assert chat.json()["demo_mode"] is True
