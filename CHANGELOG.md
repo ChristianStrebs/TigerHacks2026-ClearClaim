@@ -21,6 +21,11 @@ Because backend and mobile work live in different folders, these merges should n
 
 ### Added
 
+- **Chat memory.** `POST /api/chat` accepts an optional `history`: earlier messages, oldest
+  first, as `[{"role": "user" | "assistant", "text": "..."}]` (max 20; the last 10 are used).
+  Follow-ups like "What about a $5,000 one?" then work. Nothing is stored on the server, so
+  the app keeps the conversation and sends it with each question. Send only question and
+  answer text, not plan or bill cards.
 - **Your plan, from a PDF or photo.** `POST /api/plan/upload` takes a benefits PDF or a photo
   (PNG, JPEG, WEBP, HEIC). Gemini reads the deductible, coinsurance, and out-of-pocket max and
   writes a plain-language summary. The uploaded plan becomes the active plan for chat and bill
@@ -62,6 +67,8 @@ Because backend and mobile work live in different folders, these merges should n
 - The sample bill is now a wellness visit + flu shot billed to the patient, with a duplicate
   visit charge: $565 total, all of it money at risk. Offline and live results agree.
 - Plan summaries always come back as `- ` bullet lines separated by newlines.
+- Chat answers use the loaded plan directly instead of hedging with "depending on your
+  plan's exact rules". When a detail isn't in the plan, the answer says what's missing.
 
 ### Fixed
 
@@ -84,7 +91,7 @@ Interactive docs with every schema: `http://<backend>/docs`.
 | POST | `/api/plan/upload` | multipart `file` (PDF or photo) | `PlanResponse` |
 | POST | `/api/plan/text` | JSON `{"title": "...", "text": "..."}` | `PlanResponse` |
 | POST | `/api/plan/reset` | — | `PlanResponse` |
-| POST | `/api/chat` | JSON `{"message": "..."}` | `ChatResponse` |
+| POST | `/api/chat` | JSON `{"message": "...", "history": [...]}` (history optional) | `ChatResponse` |
 | POST | `/api/eob/scan` | multipart `file` (PDF or photo) | `EobScanResponse` |
 | GET | `/api/samples` | — | list of `{name, kind, description, url}` |
 | GET | `/api/samples/{name}` | — | the PDF |
