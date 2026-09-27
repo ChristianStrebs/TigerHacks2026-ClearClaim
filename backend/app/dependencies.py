@@ -1,48 +1,57 @@
-"""FastAPI dependency helpers for accessing shared services."""
+"""FastAPI dependency helpers for accessing shared services and the member's data."""
 
 from __future__ import annotations
 
-from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from fastapi import HTTPException, Request
+from fastapi import Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from app.auth import LOCAL_MEMBER, SIGN_IN_DETAIL, Member, TokenVerifier
 from app.config import Settings
-from app.schemas import EobScanResponse
-from app.services.benefits import PlanProfile
 from app.services.gemini import GeminiService
-from app.services.vector_store import VectorStore
+from app.services.storage import MemberStore, SavedPlan, Storage
 
 NO_PLAN_DETAIL = "Choose the sample plan or add your own benefits first."
-MAX_SAVED_SCANS = 5
+
+_bearer = HTTPBearer(auto_error=False, description="Supabase access token")
 
 
 @dataclass
 class AppServices:
     settings: Settings
     gemini: GeminiService
-    vector_store: VectorStore
-    # Single active plan: ClearClaim is a single-member demo with no accounts.
-    # None until the member picks the sample plan or submits their own.
-    plan: PlanProfile | None = None
-    # Newest last. In memory only: a restart or plan change forgets them.
-    scans: deque[EobScanResponse] = field(default_factory=lambda: deque(maxlen=MAX_SAVED_SCANS))
-
-    def set_plan(self, plan: PlanProfile | None) -> None:
-        """Switch plans; saved scans were checked against the old plan, so drop them."""
-        self.plan = plan
-        self.scans.clear()
-
-    @property
-    def latest_scan(self) -> EobScanResponse | None:
-        return self.scans[-1] if self.scans else None
+    storage: Storage
+    # None when Supabase isn't configured: everyone is the single local member.
+    verifier: TokenVerifier | None = None
 
 
 def get_services(request: Request) -> AppServices:
     return request.app.state.services
 
 
-def require_plan(services: AppServices) -> PlanProfile:
-    if services.plan is None:
+def current_member(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    services: AppServices = Depends(get_services),
+) -> Member:
+    if services.verifier is None:
+        return LOCAL_MEMBER
+    if credentials is None:
+        raise HTTPException(
+            status_code=401, detail=SIGN_IN_DETAIL, headers={"WWW-Authenticate": "Bearer"}
+        )
+    return services.verifier.member(credentials.credentials)
+
+
+def member_store(
+    member: Member = Depends(current_member),
+    services: AppServices = Depends(get_services),
+) -> MemberStore:
+    return services.storage.for_member(member)
+
+
+def require_plan(store: MemberStore) -> SavedPlan:
+    saved = store.get_plan()
+    if saved is None:
         raise HTTPException(status_code=409, detail=NO_PLAN_DETAIL)
-    return services.plan
+    return saved
