@@ -17,6 +17,52 @@ Because backend and mobile work live in different folders, these merges should n
 
 ---
 
+## [Unreleased] - `demo-ready` branch - 2026-09-27
+
+Not yet merged into `main`.
+
+### Added
+
+- **Private saved data per browser (Supabase).** Each browser gets an anonymous Supabase
+  session, so there's no login page. Its plan, plan search index, last 5 bill scans, and
+  chat history are saved in Postgres and come back after a refresh. Row level security
+  keeps every visitor's rows private. Without Supabase settings the backend falls back to
+  one shared in-memory plan, which is what the tests use.
+- **Send the session token.** When Supabase is on, every `/api/*` call except `/api/health`
+  and `/api/samples` needs `Authorization: Bearer <Supabase access token>`. A missing or
+  expired token gets `401`, and the web app signs in again and retries once. If the
+  database can't be reached, the response is `503`.
+- **Choose how to start.** Nothing loads automatically. `POST /api/plan/sample` loads the
+  labeled sample plan (`/api/plan/reset` still works). `POST /api/plan/clear` removes the
+  plan and everything saved with it. Chat and bill scans return `409` until a plan is chosen.
+- **Unrelated uploads are rejected.** Plans or bills that aren't health documents get `422`
+  with a plain-language message, and the current plan is kept.
+- **Saved bill scans.** Scans now include `scan_id`, `file_name`, `scanned_at`, and the plan
+  name. `GET /api/eob/scans` lists the latest 5, `GET /api/eob/scans/{scan_id}` fetches one,
+  and `DELETE /api/eob/scans` clears them. Chat uses the latest scan automatically.
+- **Saved chat.** Every answered question is saved. `GET /api/chat/history` returns
+  `[{"question", "response"}]`, oldest first (up to 50).
+- **Database migrations** in `supabase/migrations/`: tables `plans`, `plan_chunks` (pgvector),
+  `bill_scans`, and `chat_messages`, plus the `replace_plan` and `match_plan_chunks`
+  functions. Changing or clearing a plan deletes its chunks, scans, and chats.
+
+### Changed
+
+- `GET /api/health` now returns `supabase_enabled` and `storage` (`"in-memory"` or
+  `"supabase"`) instead of `benefits` and `indexed_chunks`. Read plan numbers from
+  `GET /api/plan`.
+- Config: set `SUPABASE_URL` (base URL, no `/rest/v1`) and `SUPABASE_PUBLISHABLE_KEY` in
+  `backend/.env`, and `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in
+  `frontend/.env.local`. The service role key is no longer used. In the Supabase dashboard,
+  turn on Authentication → Sign In / Providers → "Allow anonymous sign-ins".
+
+### Removed
+
+- `/api/documents` and the old shared index migrations (`0001_init.sql`,
+  `0002_atomic_document_replacement.sql`).
+
+---
+
 ## Proposed review branch — phone UI and targeted fixes
 
 Not yet merged. Based on f2c4a72749f372b561cce018ce15013c2f058e13.
