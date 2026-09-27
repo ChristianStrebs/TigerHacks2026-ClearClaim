@@ -12,6 +12,7 @@ Two backends implement :class:`Storage`:
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from collections import deque
 from dataclasses import dataclass, field
@@ -243,6 +244,12 @@ class InMemoryMemberStore:
 # Supabase
 # --------------------------------------------------------------------------- #
 _FOREIGN_KEY_VIOLATION = "23503"
+# A token signed a moment ago can look "issued in the future" when the auth
+# server's clock runs slightly ahead of the database's; it's valid once the
+# clocks catch up.
+_JWT_ISSUED_IN_FUTURE = "PGRST303"
+_CLOCK_SKEW_RETRIES = 2
+_CLOCK_SKEW_WAIT_SECONDS = 1.0
 
 
 class SupabaseStorage:
@@ -296,6 +303,13 @@ def _saved_plan(row: dict[str, Any]) -> SavedPlan:
     return SavedPlan(id=row["id"], profile=profile, embed_model=row["embed_model"])
 
 
+def _error_body(response: httpx.Response) -> dict[str, Any]:
+    if not response.is_error or "json" not in response.headers.get("content-type", ""):
+        return {}
+    body = response.json()
+    return body if isinstance(body, dict) else {}
+
+
 class SupabaseMemberStore:
     def __init__(self, http: httpx.Client, member: Member) -> None:
         self._http = http
@@ -313,13 +327,19 @@ class SupabaseMemberStore:
         headers = {"Authorization": f"Bearer {self._member.access_token}"}
         if prefer:
             headers["Prefer"] = prefer
-        try:
-            response = self._http.request(method, path, params=params, json=body, headers=headers)
-        except httpx.HTTPError as exc:
-            logger.warning("Supabase %s %s failed: %s", method, path, exc)
-            raise StorageError("Couldn't reach the database.") from exc
+        for attempt in range(_CLOCK_SKEW_RETRIES + 1):
+            try:
+                response = self._http.request(
+                    method, path, params=params, json=body, headers=headers
+                )
+            except httpx.HTTPError as exc:
+                logger.warning("Supabase %s %s failed: %s", method, path, exc)
+                raise StorageError("Couldn't reach the database.") from exc
+            error = _error_body(response)
+            if error.get("code") != _JWT_ISSUED_IN_FUTURE or attempt == _CLOCK_SKEW_RETRIES:
+                break
+            time.sleep(_CLOCK_SKEW_WAIT_SECONDS)
         if response.is_error:
-            error = response.json() if "json" in response.headers.get("content-type", "") else {}
             logger.warning(
                 "Supabase %s %s returned %s: %s", method, path, response.status_code, error
             )
