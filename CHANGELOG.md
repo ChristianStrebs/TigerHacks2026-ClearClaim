@@ -17,9 +17,9 @@ Because backend and mobile work live in different folders, these merges should n
 
 ---
 
-## [Unreleased] - `demo-ready` branch - 2026-09-27
+## `demo-ready` branch - 2026-09-27
 
-Not yet merged into `main`.
+Merged into `main` on 2026-09-27.
 
 ### Added
 
