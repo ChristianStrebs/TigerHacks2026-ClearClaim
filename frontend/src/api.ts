@@ -1,4 +1,5 @@
-import { accessToken, resetSession, sessionsEnabled } from "./session";
+import { API_BASE_URL } from "./apiBase";
+import { accessToken, resetSession } from "./session";
 import type {
   ChatHistoryItem,
   ChatResponse,
@@ -10,8 +11,6 @@ import type {
   SampleFile,
 } from "./types";
 
-// Empty means same-origin /api (proxied to FastAPI during Vite development).
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
 const READ_TIMEOUT_MS = 20_000;
 const AI_TIMEOUT_MS = 180_000;
 export const UPLOAD_ACCEPT =
@@ -57,16 +56,14 @@ async function request<T>(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(`${BASE_URL}${path}`, {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
       headers,
       signal: controller.signal,
       cache: "no-store",
     });
-    if (response.status === 401 && sessionsEnabled && !retried) {
-      await resetSession();
+    if (response.status === 401 && !retried && (await resetSession()))
       return await request(path, init, timeoutMs, read, true);
-    }
     if (!response.ok) {
       let message = `Request failed (${response.status}). Please try again.`;
       try {
