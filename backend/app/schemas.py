@@ -73,8 +73,18 @@ class CostEstimate(BaseModel):
     explanation: str
 
 
+class ChatTurn(BaseModel):
+    role: Literal["user", "assistant"]
+    text: str = Field(..., min_length=1, max_length=4000)
+
+
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1)
+    history: list[ChatTurn] = Field(
+        default_factory=list,
+        max_length=20,
+        description="Earlier messages in this conversation, oldest first, so follow-ups work.",
+    )
     billed_amount: float | None = Field(
         default=None,
         ge=0,
