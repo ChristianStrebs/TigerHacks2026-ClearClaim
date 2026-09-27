@@ -4,6 +4,7 @@ import {
   chooseSamplePlan,
   clearPlan,
   downloadSample,
+  getChatHistory,
   getHealth,
   getPlan,
   getSamples,
@@ -111,23 +112,24 @@ export default function App() {
   const hasPlan = !!plan && plan.source !== "none";
   const canChoosePlan = !!health && !busy;
   const available = hasPlan && canChoosePlan;
+  const privateData = health?.supabase_enabled ?? false;
 
   async function refresh() {
     if (operation.current) return;
     const version = ++syncVersion.current;
     setSyncing(true);
     setConnectionError("");
-    const [h, p, s, saved] = await Promise.allSettled([
+    const [h, p, s, saved, history] = await Promise.allSettled([
       getHealth(),
       getPlan(),
       getSamples(),
       getScans(),
+      getChatHistory(),
     ]);
     if (version !== syncVersion.current) return;
     const errors: string[] = [];
     if (h.status === "fulfilled") {
       setHealth(h.value);
-      setBenefits(h.value.benefits ?? null);
     } else {
       setHealth(null);
       errors.push(errorMessage(h.reason));
@@ -138,7 +140,7 @@ export default function App() {
         setTurns([]);
         setReview(null);
         setNotice(
-          "The shared plan changed. Previous results have been cleared.",
+          "Your plan was changed in another tab. Previous results have been cleared.",
         );
       }
       planSignature.current = signature;
@@ -161,8 +163,12 @@ export default function App() {
         "Sample files are unavailable. You can still upload your own file.",
       );
     }
-    // The backend forgets scans when the plan changes, so its newest scan is current.
+    // The backend drops scans and chats when the plan changes, so what it returns is current.
     if (saved.status === "fulfilled") setReview(saved.value[0] ?? null);
+    if (history.status === "fulfilled")
+      setTurns(
+        history.value.map(({ question, response }) => ({ question, response })),
+      );
     setConnectionError([...new Set(errors)].join(" "));
     setSyncing(false);
   }
@@ -419,7 +425,7 @@ export default function App() {
                 ? "Checking your plan…"
                 : pending === "scan"
                   ? "Reviewing the bill…"
-                  : "Updating the shared plan…"}{" "}
+                  : "Updating your plan…"}{" "}
               AI requests may take a minute or more.
             </div>
           )}
@@ -860,9 +866,11 @@ export default function App() {
                   </>
                 )}
                 <p className="footnote">
-                  One shared plan for this server. Choosing a plan or starting
-                  over changes it for everyone. Uploaded plans start with $0
-                  deductible met; this app does not track paid claims.
+                  {privateData
+                    ? "Your plan, bill scans, and chats are saved privately for this browser."
+                    : "One shared plan for this server. Choosing a plan or starting over changes it for everyone."}{" "}
+                  Uploaded plans start with $0 deductible met; this app does not
+                  track paid claims.
                 </p>
               </div>
             )}
@@ -954,8 +962,8 @@ export default function App() {
             </div>
             <p className="shared-warning">
               {sheet === "clear"
-                ? "This removes the active plan and saved bill scans for everyone using this backend, then returns to the welcome screen."
-                : "This replaces the active plan for everyone using this backend and clears previous chats and bill scans."}
+                ? `This removes ${privateData ? "your" : "the shared"} plan, bill scans, and chats, then returns to the welcome screen.`
+                : `This replaces ${privateData ? "your" : "the shared"} plan and clears previous chats and bill scans.`}
             </p>
             {sheet === "clear" ? (
               <button
