@@ -63,6 +63,12 @@ export interface EobScanResponse {
   line_items: EobLineItem[];
   overcharge_flags: string[];
   potential_savings: number;
+  /** What the member should pay once flagged charges are fixed. */
+  you_owe: number;
+  /** How much of you_owe counted toward the deductible when it was scanned. */
+  applied_to_deductible: number;
+  /** Scanning the same file again replaces the earlier scan. */
+  file_sha256: string | null;
   summary: string;
   demo_mode: boolean;
 }
