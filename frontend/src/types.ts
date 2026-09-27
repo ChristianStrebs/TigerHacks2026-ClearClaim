@@ -82,6 +82,16 @@ export interface EobLineItem {
 }
 
 /** A patient protection that may apply to some of a bill's charges. */
+export interface DisputeKit {
+  /** Ready to send once the [bracketed] placeholders are filled in. */
+  letter: string;
+  call_script: string[];
+  checklist: string[];
+  deadline_note: string;
+  /** True when written from a template instead of by Gemini. */
+  demo_mode: boolean;
+}
+
 export interface RightsFinding {
   rule_id: string;
   title: string;
