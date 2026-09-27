@@ -18,7 +18,6 @@ def test_health_reports_demo_mode(client: TestClient) -> None:
     body = resp.json()
     assert body["status"] == "ok"
     assert body["vector_store"] == "in-memory"
-    # Sample policy is auto-seeded on startup.
     assert body["indexed_chunks"] > 0
 
 
