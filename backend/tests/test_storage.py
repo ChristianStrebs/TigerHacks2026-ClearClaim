@@ -47,7 +47,10 @@ def _answer() -> ChatResponse:
         answer="Hello",
         sources=[],
         benefits=BenefitsSnapshot(
-            deductible_total=1, deductible_met=0, deductible_remaining=1, coinsurance_rate=0.2,
+            deductible_total=1,
+            deductible_met=0,
+            deductible_remaining=1,
+            coinsurance_rate=0.2,
             oop_max=1,
         ),
         demo_mode=True,
@@ -171,6 +174,48 @@ def test_supabase_skips_lookups_for_malformed_scan_ids() -> None:
     storage, requests = _supabase(lambda _: httpx.Response(200, json=[]))
     assert storage.for_member(ALICE).get_scan("not-a-uuid") is None
     assert requests == []
+
+
+def test_supabase_bill_ledger_reads_only_the_totals() -> None:
+    rows = [
+        {"id": "a", "you_owe": 125.5, "file_sha256": "abc"},
+        {"id": "b", "you_owe": None, "file_sha256": None},
+    ]
+    storage, requests = _supabase(lambda _: httpx.Response(200, json=rows))
+
+    ledger = storage.for_member(ALICE).bill_ledger()
+
+    assert [(e.scan_id, e.file_sha256, e.you_owe) for e in ledger] == [
+        ("a", "abc", 125.5),
+        ("b", None, 0.0),
+    ]
+    select = requests[0].url.params["select"]
+    assert "result->you_owe" in select
+    assert "limit" not in requests[0].url.params
+
+
+def test_supabase_deletes_one_scan_by_id() -> None:
+    storage, requests = _supabase(lambda _: httpx.Response(204))
+    store = storage.for_member(ALICE)
+
+    store.delete_scan("not-a-uuid")
+    store.delete_scan(_scan().scan_id)
+
+    [request] = requests
+    assert request.method == "DELETE"
+    assert request.url.params["id"] == f"eq.{_scan().scan_id}"
+
+
+def test_in_memory_ledger_keeps_bills_past_the_listing_cap() -> None:
+    store = InMemoryStorage().for_member(ALICE)
+    saved = store.replace_plan(PLAN, [Chunk("Plan", "Coverage", [1.0])], "offline:1")
+    for i in range(8):
+        store.add_scan(saved.id, _scan().model_copy(update={"scan_id": str(i), "you_owe": 10}))
+
+    assert len(store.list_scans()) == 5
+    assert sum(e.you_owe for e in store.bill_ledger()) == 80
+    store.delete_scan("3")
+    assert [e.scan_id for e in store.bill_ledger()] == ["0", "1", "2", "4", "5", "6", "7"]
 
 
 def test_supabase_storage_requires_a_signed_in_member() -> None:
