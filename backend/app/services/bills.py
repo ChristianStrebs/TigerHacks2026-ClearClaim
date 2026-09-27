@@ -19,9 +19,12 @@ def mentions_bill(text: str) -> bool:
     return _BILL_WORDS.search(text) is not None
 
 
-def bills_owed(store: MemberStore) -> float:
-    """What the member owes across every saved bill for the current plan."""
-    return round(sum(entry.you_owe for entry in store.bill_ledger()), 2)
+def deductible_from_bills(store: MemberStore) -> float:
+    """How much every saved bill for the current plan paid toward the deductible.
+
+    Only each bill's deductible portion counts; coinsurance never does.
+    """
+    return round(sum(entry.applied_to_deductible for entry in store.bill_ledger()), 2)
 
 
 def member_cost(items: Sequence[EobLineItem], benefits: BenefitsSnapshot) -> float:
@@ -56,6 +59,14 @@ def describe_scan(scan: EobScanResponse) -> str:
         lines.append(
             f"- {item.code} {item.description}: billed ${item.billed:,.2f}, {expected}.{flag}"
         )
+    if scan.rights:
+        lines.append("Patient protections that may apply:")
+        lines += [
+            f"- {finding.title} (applies to: {', '.join(finding.lines)}). "
+            f"Member should owe: {finding.you_should_owe} What to do: {finding.action} "
+            f"Source: {finding.citation_url}"
+            for finding in scan.rights
+        ]
     if scan.summary:
         lines.append(f"Summary: {scan.summary}")
     return "\n".join(lines)
