@@ -14,9 +14,10 @@ from pydantic import ValidationError
 
 from app.dependencies import AppServices, get_services, member_store, require_plan
 from app.routers.samples import offline_bill_analysis
-from app.schemas import MAX_NAME_CHARS, EobLineItem, EobScanResponse
+from app.schemas import MAX_NAME_CHARS, DisputeKit, EobLineItem, EobScanResponse
 from app.services.benefits import snapshot
 from app.services.bills import member_cost
+from app.services.dispute import dispute_kit
 from app.services.indexing import search_plan
 from app.services.rights import check_rights
 from app.services.storage import MemberStore, PlanReplacedError, SavedPlan
@@ -220,6 +221,20 @@ def get_scan(scan_id: str, store: MemberStore = Depends(member_store)) -> EobSca
     if scan is None:
         raise HTTPException(status_code=404, detail=SCAN_GONE_DETAIL)
     return scan
+
+
+@router.post("/scans/{scan_id}/dispute", response_model=DisputeKit)
+def dispute_scan(
+    scan_id: str,
+    services: AppServices = Depends(get_services),
+    store: MemberStore = Depends(member_store),
+) -> DisputeKit:
+    """A letter, call script, and checklist to challenge a saved bill, written fresh each time."""
+    plan = require_plan(store)
+    scan = store.get_scan(scan_id)
+    if scan is None:
+        raise HTTPException(status_code=404, detail=SCAN_GONE_DETAIL)
+    return dispute_kit(services.gemini, scan, _policy_context(services, store, plan))
 
 
 @router.delete("/scans/{scan_id}", status_code=204)
