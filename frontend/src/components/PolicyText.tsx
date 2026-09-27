@@ -1,13 +1,19 @@
 import { Fragment } from "react";
 
-// The backend emits **bold** and - bullets. React escapes all other content;
+// The backend asks for **bold** and - bullets, but models also write *italics*,
+// "* " or "• " bullets and # headings. React escapes all other content;
 // policy text is never inserted as HTML.
+const BULLET = /^\s*[-*•]\s+/;
+const HEADING = /^\s*#{1,6}\s+/;
+
 function inline(text: string) {
   return text
-    .split(/(\*\*[^*]+\*\*)/g)
+    .split(/(\*\*[^*]+\*\*|\*[^*\s][^*]*\*)/g)
     .map((part, index) =>
       part.startsWith("**") && part.endsWith("**") ? (
         <strong key={index}>{part.slice(2, -2)}</strong>
+      ) : part.length > 2 && part.startsWith("*") && part.endsWith("*") ? (
+        <em key={index}>{part.slice(1, -1)}</em>
       ) : (
         <Fragment key={index}>{part}</Fragment>
       ),
@@ -17,8 +23,12 @@ function inline(text: string) {
 export function PolicyText({ text }: { text: string }) {
   const groups: { bullets: boolean; lines: string[] }[] = [];
   for (const line of text.split(/\r?\n/).filter((line) => line.trim())) {
-    const bullets = /^\s*-\s/.test(line);
-    const content = bullets ? line.replace(/^\s*-\s+/, "") : line;
+    const bullets = BULLET.test(line);
+    const content = bullets
+      ? line.replace(BULLET, "")
+      : HEADING.test(line)
+        ? `**${line.replace(HEADING, "").replace(/\*\*/g, "")}**`
+        : line;
     const last = groups[groups.length - 1];
     if (bullets && last?.bullets) last.lines.push(content);
     else groups.push({ bullets, lines: [content] });
