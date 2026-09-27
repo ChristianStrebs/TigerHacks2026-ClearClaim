@@ -14,7 +14,7 @@ import hashlib
 import json
 import logging
 import re
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import NamedTuple, get_args
 
 from google import genai
@@ -107,7 +107,7 @@ review and plan excerpts, write:
 Use only facts from the bill review. Plain language (8th-grade reading level). Don't
 threaten legal action or claim to give legal advice. Respond ONLY with JSON."""
 
-_CHAT_INSTRUCTION = """You are ClearClaim, a friendly healthcare benefits copilot for employees.
+CHAT_INSTRUCTION = """You are ClearClaim, a friendly healthcare benefits copilot for employees.
 - The benefits snapshot and policy excerpts ARE the member's plan. Answer from them
   directly and confidently, with concrete dollar amounts and deductible status. Never
   add disclaimers like "depending on your plan's exact rules" or "exact numbers depend
@@ -160,6 +160,17 @@ _GLOSSARY = {
         "plan, whether or not you use care."
     ),
 }
+
+
+def history_contents(history: Sequence[ChatTurn]) -> list[types.Content]:
+    """The most recent chat turns in Gemini's format, oldest first."""
+    return [
+        types.Content(
+            role="user" if turn.role == "user" else "model",
+            parts=[types.Part(text=turn.text)],
+        )
+        for turn in history[-_MAX_HISTORY_TURNS:]
+    ]
 
 
 class GeminiUnavailableError(RuntimeError):
@@ -217,9 +228,12 @@ class GeminiService:
         logger.error("Disabling Gemini, falling back to demo mode: %s", reason)
         self._client = None
 
-    def _generate(
-        self, contents: types.ContentListUnion, config: types.GenerateContentConfig
-    ) -> str | None:
+    def _first_response(
+        self,
+        contents: types.ContentListUnion,
+        config: types.GenerateContentConfig,
+        answered: Callable[[types.GenerateContentResponse], bool],
+    ) -> types.GenerateContentResponse | None:
         """Try the primary model, then each backup. Returns None if all fail."""
         if self._client is None:
             return None
@@ -232,11 +246,24 @@ class GeminiService:
             except Exception as exc:
                 logger.warning("Gemini model %s failed: %s", model, exc)
                 continue
-            text = (response.text or "").strip()
-            if text:
-                return text
+            if answered(response):
+                return response
             logger.warning("Gemini model %s returned an empty response", model)
         return None
+
+    def _generate(
+        self, contents: types.ContentListUnion, config: types.GenerateContentConfig
+    ) -> str | None:
+        response = self._first_response(contents, config, lambda r: bool((r.text or "").strip()))
+        return response.text.strip() if response else None
+
+    def generate_turn(
+        self, contents: types.ContentListUnion, config: types.GenerateContentConfig
+    ) -> types.GenerateContentResponse | None:
+        """One model turn that may ask to call tools instead of answering."""
+        return self._first_response(
+            contents, config, lambda r: bool(r.function_calls or (r.text or "").strip())
+        )
 
     # ------------------------------------------------------------------ #
     # Embeddings
@@ -313,17 +340,11 @@ class GeminiService:
             + (f"Cost estimate (use these exact figures):\n{cost_note}\n\n" if cost_note else "")
             + f"Member question: {question}"
         )
-        contents = [
-            types.Content(
-                role="user" if turn.role == "user" else "model",
-                parts=[types.Part(text=turn.text)],
-            )
-            for turn in history[-_MAX_HISTORY_TURNS:]
-        ]
+        contents = history_contents(history)
         contents.append(types.Content(role="user", parts=[types.Part(text=prompt)]))
         text = self._generate(
             contents,
-            types.GenerateContentConfig(system_instruction=_CHAT_INSTRUCTION, temperature=0.2),
+            types.GenerateContentConfig(system_instruction=CHAT_INSTRUCTION, temperature=0.2),
         )
         if text is None:
             return TextResult(self._fallback_answer(question, context, bill), live=False)

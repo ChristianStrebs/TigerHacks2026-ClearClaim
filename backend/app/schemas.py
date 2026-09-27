@@ -145,6 +145,15 @@ class ChatRequest(BaseModel):
     )
 
 
+AgentTool = Literal["search_plan", "get_bill", "estimate_cost", "check_rights"]
+
+
+class AgentStep(BaseModel):
+    tool: AgentTool
+    label: str = Field(description="What the AI did, like 'Searched your plan for MRI'.")
+    result: str = Field(description="A short summary of what the tool found.")
+
+
 class ChatResponse(BaseModel):
     answer: str
     sources: list[Source]
@@ -152,6 +161,10 @@ class ChatResponse(BaseModel):
     cost_estimate: CostEstimate | None = None
     bill_scan_id: str | None = Field(
         default=None, description="The saved bill scan the answer could draw on, if any."
+    )
+    steps: list[AgentStep] = Field(
+        default_factory=list,
+        description="Tools the AI used to answer, in order; empty when it answered without them.",
     )
     demo_mode: bool
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 
-from app.schemas import BenefitsSnapshot, EobLineItem, EobScanResponse
+from app.schemas import BenefitsSnapshot, EobLineItem, EobScanResponse, RightsFinding
 from app.services.benefits import estimate_out_of_pocket
 from app.services.storage import MemberStore
 
@@ -61,15 +61,19 @@ def describe_scan(scan: EobScanResponse) -> str:
         )
     if scan.rights:
         lines.append("Patient protections that may apply:")
-        lines += [
-            f"- {finding.title} (applies to: {', '.join(finding.lines)}). "
-            f"Member should owe: {finding.you_should_owe} What to do: {finding.action} "
-            f"Source: {finding.citation_url}"
-            for finding in scan.rights
-        ]
+        lines += describe_rights(scan.rights)
     if scan.summary:
         lines.append(f"Summary: {scan.summary}")
     return "\n".join(lines)
+
+
+def describe_rights(findings: Sequence[RightsFinding]) -> list[str]:
+    return [
+        f"- {finding.title} (applies to: {', '.join(finding.lines)}). "
+        f"Member should owe: {finding.you_should_owe} What to do: {finding.action} "
+        f"Source: {finding.citation_url}"
+        for finding in findings
+    ]
 
 
 def describe_scans(scans: Sequence[EobScanResponse]) -> str:
