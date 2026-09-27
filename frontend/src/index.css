@@ -713,6 +713,41 @@ button:active {
 .answer summary {
   cursor: pointer;
 }
+.answer-steps ol {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+  display: grid;
+  gap: 10px;
+}
+.answer-steps li {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+}
+.step-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: #fff;
+  color: #e93e54;
+}
+.answer-steps strong {
+  display: block;
+  color: #4d4251;
+  font-size: 12px;
+}
+.answer-steps li p {
+  font-size: 12px;
+  margin: 1px 0 0;
+}
+.answer-steps-note {
+  margin: 10px 0 0;
+  font-size: 11px;
+}
 .answer blockquote {
   margin: 12px 0;
   border-left: 2px solid #e1cfd8;
