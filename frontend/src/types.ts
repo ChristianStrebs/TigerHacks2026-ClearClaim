@@ -4,12 +4,23 @@ export interface Source {
   score: number;
 }
 
+export type PlanField = "deductible_total" | "coinsurance_rate" | "oop_max";
+
 export interface BenefitsSnapshot {
   deductible_total: number;
   deductible_met: number;
   deductible_remaining: number;
   coinsurance_rate: number;
   oop_max: number;
+  demo_fields: PlanField[];
+}
+
+export interface PlanResponse {
+  plan_name: string;
+  source: "demo" | "document";
+  benefits: BenefitsSnapshot;
+  summary: string;
+  demo_mode: boolean;
 }
 
 export interface CostEstimate {
@@ -42,6 +53,7 @@ export interface EobScanResponse {
   total_billed: number;
   line_items: EobLineItem[];
   overcharge_flags: string[];
+  potential_savings: number;
   summary: string;
   demo_mode: boolean;
 }

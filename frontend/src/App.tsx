@@ -1,75 +1,78 @@
 import { useEffect, useState } from "react";
-import { getHealth } from "./api";
+import { getHealth, getPlan } from "./api";
 import { ChatPanel } from "./components/ChatPanel";
-import { EobScanner } from "./components/EobScanner";
-import type { BenefitsSnapshot, HealthResponse } from "./types";
+import { Splash } from "./components/Splash";
+import type { HealthResponse, PlanResponse } from "./types";
 
-type Tab = "chat" | "eob";
+const MIN_SPLASH_MS = 1400;
+const MAX_SPLASH_MS = 5000;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function orNull<T>(request: Promise<T>): Promise<T | null> {
+  try {
+    return await Promise.race([request, delay(MAX_SPLASH_MS).then(() => null)]);
+  } catch {
+    return null;
+  }
+}
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("chat");
+  const [loaded, setLoaded] = useState(false);
   const [health, setHealth] = useState<HealthResponse | null>(null);
-  const [, setBenefits] = useState<BenefitsSnapshot | null>(null);
+  const [plan, setPlan] = useState<PlanResponse | null>(null);
 
   useEffect(() => {
-    getHealth()
-      .then(setHealth)
-      .catch(() => setHealth(null));
+    let cancelled = false;
+    void Promise.all([orNull(getHealth()), orNull(getPlan()), delay(MIN_SPLASH_MS)]).then(
+      ([h, p]) => {
+        if (cancelled) return;
+        setHealth(h);
+        setPlan(p);
+        setLoaded(true);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  if (!loaded) return <Splash />;
 
   return (
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <span className="logo">🩺</span>
+          <span className="logo" aria-hidden="true">
+            🩺
+          </span>
           <div>
             <h1>ClearClaim</h1>
-            <p className="tagline">Your healthcare benefits copilot</p>
+            <p className="tagline">Know what you owe. Catch what you shouldn't.</p>
           </div>
         </div>
         <div className="status">
           {health ? (
-            <>
-              <span
-                className={`badge ${health.gemini_enabled ? "live" : "demo"}`}
-                title={`Chat model: ${health.chat_model}`}
-              >
-                {health.gemini_enabled ? "Gemini live" : "Demo mode"}
-              </span>
-              <span className="badge subtle">{health.indexed_chunks} policy chunks</span>
-            </>
+            <span
+              className={`badge ${health.gemini_enabled ? "live" : "demo"}`}
+              title={`Chat model: ${health.chat_model}`}
+            >
+              {health.gemini_enabled ? "Gemini live" : "Demo mode"}
+            </span>
           ) : (
             <span className="badge offline">API offline</span>
           )}
         </div>
       </header>
 
-      <nav className="tabs">
-        <button
-          className={tab === "chat" ? "tab active" : "tab"}
-          onClick={() => setTab("chat")}
-        >
-          Benefits chat
-        </button>
-        <button
-          className={tab === "eob" ? "tab active" : "tab"}
-          onClick={() => setTab("eob")}
-        >
-          Bill scanner
-        </button>
-      </nav>
-
       <main className="content">
-        {tab === "chat" ? (
-          <ChatPanel onBenefits={setBenefits} />
-        ) : (
-          <EobScanner />
-        )}
+        <ChatPanel initialPlan={plan} />
       </main>
 
       <footer className="footer">
-        ClearClaim focuses on administrative &amp; financial guidance — not clinical
-        advice. {health && `Chat: ${health.chat_model} · Embeddings: ${health.embed_model}`}
+        No account needed. Financial and administrative guidance only, not medical advice.
       </footer>
     </div>
   );
