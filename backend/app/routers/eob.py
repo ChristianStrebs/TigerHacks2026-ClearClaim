@@ -18,6 +18,7 @@ from app.routers.samples import SAMPLES_DIR
 from app.schemas import MAX_NAME_CHARS, EobLineItem, EobScanResponse
 from app.services.indexing import search_plan
 from app.services.storage import MemberStore, PlanReplacedError, SavedPlan
+from app.services.uploads import UNREADABLE_FILE_DETAIL, matches_type
 
 logger = logging.getLogger("clearclaim.eob")
 
@@ -129,6 +130,8 @@ async def scan_eob(
         raise HTTPException(status_code=400, detail="Uploaded file was empty.")
     if len(data) > _MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="File is too large (15 MB max).")
+    if not matches_type(data, file.content_type):
+        raise HTTPException(status_code=400, detail=UNREADABLE_FILE_DETAIL)
 
     # Database and Gemini calls block, so keep them off the event loop.
     return await run_in_threadpool(
