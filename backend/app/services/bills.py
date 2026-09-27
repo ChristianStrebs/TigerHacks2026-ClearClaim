@@ -1,10 +1,13 @@
-"""Turn a saved bill scan into plain text the chat can reason about."""
+"""Bill math and turning saved bill scans into plain text the chat can reason about."""
 
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 
-from app.schemas import EobScanResponse
+from app.schemas import BenefitsSnapshot, EobLineItem, EobScanResponse
+from app.services.benefits import estimate_out_of_pocket
+from app.services.storage import MemberStore
 
 _BILL_WORDS = re.compile(
     r"\b(bills?|charged|charges|duplicates?|double[- ]charged|disputes?|overcharged?)\b",
@@ -16,11 +19,30 @@ def mentions_bill(text: str) -> bool:
     return _BILL_WORDS.search(text) is not None
 
 
+def bills_owed(store: MemberStore) -> float:
+    """What the member owes across every saved bill for the current plan."""
+    return round(sum(entry.you_owe for entry in store.bill_ledger()), 2)
+
+
+def member_cost(items: Sequence[EobLineItem], benefits: BenefitsSnapshot) -> float:
+    """What the member should pay once flagged charges are fixed.
+
+    Lines with an expected member cost use it. Lines without one are estimated from the
+    plan's remaining deductible and coinsurance. Never more than the amount billed.
+    """
+    known = sum(item.plan_expected for item in items if item.plan_expected is not None)
+    unknown = sum(item.billed for item in items if item.plan_expected is None)
+    estimated = estimate_out_of_pocket(unknown, benefits).estimated_out_of_pocket if unknown else 0
+    billed = sum(item.billed for item in items)
+    return round(min(max(known + estimated, 0.0), billed), 2)
+
+
 def describe_scan(scan: EobScanResponse) -> str:
     lines = [
         f"Bill from {scan.provider or 'an unknown provider'} (file: {scan.file_name}), "
         f"checked against {scan.plan_name}.",
         f"Total billed: ${scan.total_billed:,.2f}. "
+        f"Member should pay: ${scan.you_owe:,.2f}. "
         f"Potential savings to question: ${scan.potential_savings:,.2f}.",
         "Line items:",
     ]
@@ -37,3 +59,13 @@ def describe_scan(scan: EobScanResponse) -> str:
     if scan.summary:
         lines.append(f"Summary: {scan.summary}")
     return "\n".join(lines)
+
+
+def describe_scans(scans: Sequence[EobScanResponse]) -> str:
+    """The newest bill first, then earlier ones, so the chat can compare them."""
+    if not scans:
+        return ""
+    latest, *earlier = scans
+    parts = [describe_scan(latest)]
+    parts += [f"Earlier bill {i}:\n{describe_scan(scan)}" for i, scan in enumerate(earlier, 1)]
+    return "\n\n".join(parts)
