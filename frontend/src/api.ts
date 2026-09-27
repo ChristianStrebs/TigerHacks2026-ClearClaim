@@ -141,6 +141,13 @@ export const chooseSamplePlan = () =>
   jsonPost<PlanResponse>("/api/plan/sample");
 export const clearPlan = () => jsonPost<PlanResponse>("/api/plan/clear");
 export const getScans = () => request<EobScanResponse[]>("/api/eob/scans");
+export const deleteScan = (scanId: string) =>
+  request<void>(
+    `/api/eob/scans/${encodeURIComponent(scanId)}`,
+    { method: "DELETE" },
+    READ_TIMEOUT_MS,
+    async () => undefined,
+  );
 export const getChatHistory = () =>
   request<ChatHistoryItem[]>("/api/chat/history");
 export const submitPlanText = (title: string, text: string) =>
