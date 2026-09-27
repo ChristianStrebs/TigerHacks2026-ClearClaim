@@ -83,6 +83,47 @@ def test_reset_restores_sample_plan(client: TestClient) -> None:
     assert chat["sources"][0]["document"] == body["plan_name"]
 
 
+def test_pasted_policy_returns_offline_summary(client: TestClient) -> None:
+    text = (
+        "ACME Corp Health Plan. Individual deductible: $2,000 per year. "
+        "After the deductible you pay 20% coinsurance. "
+        "Out-of-pocket maximum: $6,000 per year. "
+        "Preventive care is covered at 100% with no deductible. "
+        "Watch out: knee surgery needs prior authorization or a $500 penalty. "
+    ) * 3
+    before = client.get("/api/health").json()["indexed_chunks"]
+
+    resp = client.post("/api/plan/text", json={"title": "ACME paste", "text": text})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["source"] == "document"
+    assert body["summary"]
+    assert "Deductible" in body["summary"] or "deductible" in body["summary"].lower()
+    assert body["benefits"]["deductible_total"] == 2000
+    after = client.get("/api/health").json()
+    assert after["indexed_chunks"] >= 1
+    assert after["benefits"]["deductible_total"] == 2000
+    assert before > 0
+
+
+def test_paste_without_numbers_is_honest_about_demo_values(client: TestClient) -> None:
+    resp = client.post(
+        "/api/plan/text",
+        json={"title": "Mystery booklet", "text": "Employee handbook cover page. " * 20},
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["plan_name"] == "Mystery booklet"
+    assert "couldn't pick out the key numbers" in body["summary"]
+    assert set(body["benefits"]["demo_fields"]) == {
+        "deductible_total",
+        "coinsurance_rate",
+        "oop_max",
+    }
+
+
 def test_coinsurance_accepts_percent_or_fraction_and_rejects_nonsense() -> None:
     settings = Settings()
 
