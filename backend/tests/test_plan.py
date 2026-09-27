@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
+from app.routers.plan import NOT_BENEFITS_DETAIL
 from app.services.benefits import plan_from_extraction
+from app.services.gemini import PlanResult
 from tests.pdf_utils import make_text_pdf
 
 _FULL_PLAN = [
@@ -108,10 +111,8 @@ def test_pasted_policy_returns_offline_summary(client: TestClient) -> None:
 
 
 def test_paste_without_numbers_is_honest_about_demo_values(client: TestClient) -> None:
-    resp = client.post(
-        "/api/plan/text",
-        json={"title": "Mystery booklet", "text": "Employee handbook cover page. " * 20},
-    )
+    text = "Your health plan covers preventive care. Ask HR about your deductible and copays."
+    resp = client.post("/api/plan/text", json={"title": "Mystery booklet", "text": text})
 
     assert resp.status_code == 200
     body = resp.json()
@@ -122,6 +123,41 @@ def test_paste_without_numbers_is_honest_about_demo_values(client: TestClient) -
         "coinsurance_rate",
         "oop_max",
     }
+
+
+def test_unrelated_paste_is_rejected_and_keeps_current_plan(client: TestClient) -> None:
+    before = client.get("/api/plan").json()
+
+    resp = client.post(
+        "/api/plan/text",
+        json={"title": "Handbook", "text": "Employee handbook cover page. " * 20},
+    )
+
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == NOT_BENEFITS_DETAIL
+    assert client.get("/api/plan").json() == before
+
+
+def test_unrelated_pdf_is_rejected_and_keeps_current_plan(client: TestClient) -> None:
+    recipe = make_text_pdf(["Chocolate chip cookies", "2 cups flour, 1 cup sugar, 2 eggs."])
+
+    resp = _upload(client, recipe, "recipe.pdf", "application/pdf")
+
+    assert resp.status_code == 422
+    assert client.get("/api/plan").json()["source"] == "demo"
+
+
+def test_ai_verdict_not_benefits_is_rejected(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    gemini = client.app.state.services.gemini
+    verdict = {"is_benefits_document": False, "plan_name": "Cookies", "summary": ""}
+    monkeypatch.setattr(gemini, "extract_plan", lambda **_: PlanResult(verdict, live=True))
+
+    resp = _upload(client, make_text_pdf(_FULL_PLAN), "cookies.pdf", "application/pdf")
+
+    assert resp.status_code == 422
+    assert client.get("/api/plan").json()["plan_name"] != "Cookies"
 
 
 def test_coinsurance_accepts_percentages_and_rejects_nonsense() -> None:
