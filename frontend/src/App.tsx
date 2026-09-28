@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   ApiError,
   chooseSamplePlan,
@@ -19,6 +19,7 @@ import {
 import { Icon } from "./Icon";
 import { chatHistory } from "./chatHistory";
 import { AnswerSteps } from "./components/AnswerSteps";
+import { AppMark } from "./components/AppMark";
 import { ChoosePlan } from "./components/ChoosePlan";
 import { DisputeSheet } from "./components/DisputeSheet";
 import {
@@ -40,6 +41,8 @@ import type {
 } from "./types";
 
 type Tab = "home" | "chat" | "scan" | "plan";
+const TABS: Tab[] = ["home", "chat", "scan", "plan"];
+const TAB_LABELS = ["Home", "Ask", "Scan", "My plan"];
 type Pending = "chat" | "scan" | "remove" | "plan" | null;
 type Sheet = "upload" | "clear" | "remove" | null;
 type PlanAction = "upload" | "text" | "sample-file" | "sample-plan" | "clear";
@@ -152,6 +155,8 @@ export default function App() {
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [uploadKind, setUploadKind] = useState<"file" | "text">("file");
   const [sampleName, setSampleName] = useState("");
+  // Shows the header's divider once content scrolls under it.
+  const [scrolled, setScrolled] = useState(false);
   const scroll = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   // Also prevents rapid double clicks before React paints disabled controls.
@@ -163,6 +168,13 @@ export default function App() {
   const canChoosePlan = !!health && !busy;
   const available = hasPlan && canChoosePlan;
   const privateData = health?.supabase_enabled ?? false;
+  const aiState = syncing
+    ? "connecting"
+    : !health
+      ? "down"
+      : health.gemini_enabled
+        ? "live"
+        : "offline";
 
   async function refresh() {
     if (operation.current) return;
@@ -458,12 +470,21 @@ export default function App() {
     <div className="stage">
       <aside className="demo-heading">
         <div className="desktop-brand">
-          <img src="./app-icon.png" alt="" />
+          <AppMark />
           ClearClaim
+        </div>
+        <div className="award">
+          <span className="award-icon">
+            <Icon name="trophy" size={18} />
+          </span>
+          <span>
+            <strong>TigerHacks 2026 winner</strong>
+            <small>Best Use of Gemini API · Best Devpost Page</small>
+          </span>
         </div>
         <span className="eyebrow">YOUR BENEFITS, MADE CLEAR</span>
         <h1>
-          A little clarity.
+          A little <em>clarity</em>.
           <br />A lot less worry.
         </h1>
         <p>
@@ -471,6 +492,32 @@ export default function App() {
           <br />
           All in one place.
         </p>
+        <ul className="feature-list">
+          <li>
+            <span>
+              <Icon name="plan" size={17} />
+            </span>
+            Your plan, read for you
+          </li>
+          <li>
+            <span>
+              <Icon name="scan" size={17} />
+            </span>
+            Bills checked line by line
+          </li>
+          <li>
+            <span>
+              <Icon name="shield" size={17} />
+            </span>
+            Your rights, with official sources
+          </li>
+          <li>
+            <span>
+              <Icon name="chat" size={17} />
+            </span>
+            Answers that show their work
+          </li>
+        </ul>
         <button
           className="replay"
           onClick={() => {
@@ -483,684 +530,730 @@ export default function App() {
         <div className="desktop-note">
           iPhone-inspired web app
           <br />
-          Connected to your ClearClaim backend
+          Built with Google Gemini
         </div>
       </aside>
       <div className="device">
         <div className="hardware-button one" />
         <div className="hardware-button two" />
-        <div className="screen">
-          <header className="statusbar">
+        <div
+          className={`screen${tab === "chat" && hasPlan ? " has-composer" : ""}`}
+        >
+          <div className="statusbar" aria-hidden="true">
             <span>9:41</span>
             <div className="island" />
             <div className="signals">
-              <span className="signal">▂▄▆▇</span>
+              <span className="signal">
+                <i />
+                <i />
+                <i />
+                <i />
+              </span>
               <span className="battery" />
             </div>
-          </header>
-          <div className="app-top">
-            <div className="wordmark">
-              <img src="./app-icon.png" alt="" />
-              ClearClaim
-            </div>
-            <span className="mode">
-              {syncing
-                ? "Connecting…"
-                : health
-                  ? health.gemini_enabled
-                    ? "AI available"
-                    : "Offline AI"
-                  : "API offline"}
-            </span>
           </div>
-          {connectionError && (
-            <div className="connection-banner" role="alert">
-              <p>{connectionError}</p>
-              <button disabled={busy} onClick={() => void refresh()}>
-                Retry connection
-              </button>
-            </div>
-          )}
-          {pending && (
-            <div className="operation-status" role="status">
-              {pendingStatus(pending)}
-            </div>
-          )}
-          <main className={`phone-content ${tab}`} ref={scroll}>
-            {tab === "home" && (
-              <div className="page">
-                <div className="welcome">
-                  <span className="eyebrow">LET’S MAKE IT CLEAR</span>
-                  <h1>
-                    Your health.
-                    <br />
-                    Your peace of mind.
-                  </h1>
-                  <p>Understand your plan. Know your costs.</p>
-                </div>
-                {notice && (
-                  <p className="notice" role="status">
-                    {notice}
-                  </p>
-                )}
-                {hasPlan ? (
-                  <>
-                    {coverage}
-                    {benefits && <DemoNote benefits={benefits} />}
-                    <div className="section-heading">
-                      <h2>How can we help?</h2>
-                    </div>
-                    <div className="action-grid">
-                      <button onClick={() => setTab("chat")}>
-                        <span className="action-icon">
-                          <Icon name="chat" size={25} />
-                        </span>
-                        <strong>Ask ClearClaim</strong>
-                        <span>
-                          Your benefits,
-                          <br />
-                          in plain English
-                        </span>
-                        <Icon name="arrow" size={18} />
-                      </button>
-                      <button onClick={() => setTab("scan")}>
-                        <span className="action-icon pale">
-                          <Icon name="scan" size={25} />
-                        </span>
-                        <strong>Check a bill</strong>
-                        <span>
-                          A second look
-                          <br />
-                          at your charges
-                        </span>
-                        <Icon name="arrow" size={18} />
-                      </button>
-                    </div>
-                    <button
-                      className="question-card"
-                      disabled={!available}
-                      onClick={() => void ask(SUGGESTIONS[2])}
-                    >
-                      <span className="mini-icon">
-                        <Icon name="spark" />
-                      </span>
-                      <span>
-                        <small>A GOOD PLACE TO START</small>
-                        <strong>Is my wellness visit covered?</strong>
-                      </span>
-                      <Icon name="chevron" size={17} />
-                    </button>
-                  </>
-                ) : (
-                  choosePlan
-                )}
-                <p className="footnote">
-                  Financial and administrative guidance only. Estimates are not
-                  guaranteed costs.
-                </p>
+          <div
+            className="scroller"
+            ref={scroll}
+            onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 4)}
+          >
+            <header className="app-top" data-scrolled={scrolled || undefined}>
+              <div className="wordmark">
+                <AppMark />
+                ClearClaim
               </div>
-            )}
-            {tab === "chat" && (
-              <div className="page">
-                <div className="page-title">
-                  <span className="eyebrow">BENEFITS COPILOT</span>
-                  <h1>A clearer answer.</h1>
-                  <p>
-                    {hasPlan
-                      ? `Using ${plan?.plan_name}`
-                      : "Choose a plan to start asking questions."}
-                  </p>
-                  {hasPlan && scans.length > 0 && (
-                    <p className="bill-context">
-                      <Icon name="scan" size={16} />
-                      {scans.length > 1
-                        ? `Also using your ${scans.length} saved bills`
-                        : `Also using your bill from ${scans[0].provider ?? scans[0].file_name}`}
-                    </p>
-                  )}
+              <span className="status-pill" data-state={aiState}>
+                <i aria-hidden="true" />
+                {syncing
+                  ? "Connecting…"
+                  : health
+                    ? health.gemini_enabled
+                      ? "AI available"
+                      : "Offline AI"
+                    : "API offline"}
+              </span>
+              {pending && (
+                <div className="operation-status" role="status">
+                  {pendingStatus(pending)}
                 </div>
-                {!hasPlan ? (
-                  choosePlan
-                ) : turns.length === 0 ? (
-                  <>
-                    <div className="chat-orb">
-                      <Icon name="spark" size={32} />
-                    </div>
-                    <h2 className="center">What’s on your mind?</h2>
-                    <p className="center muted">
-                      {review
-                        ? "Ask about your bill or your plan."
-                        : "Include a dollar amount for a cost estimate."}
-                    </p>
-                    <div className="suggestion-list">
-                      {suggestions.map((suggestion, index) => (
-                        <button
-                          key={suggestion}
-                          disabled={!available}
-                          onClick={() => void ask(suggestion)}
-                        >
-                          <Icon
-                            name={["wallet", "shield", "spark", "plan"][index]}
-                            size={19}
-                          />
-                          <span>{suggestion}</span>
-                          <Icon name="plus" size={17} />
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <div className="turns" aria-live="polite">
-                    {turns.map((turn, index) => (
-                      <div key={index}>
-                        <div className="user-bubble">{turn.question}</div>
-                        {turn.response && (
-                          <div className="answer">
-                            <div className="answer-label">
-                              <Icon name="spark" size={16} /> ClearClaim{" "}
-                              <small>
-                                {aiLabel(turn.response.demo_mode)}
-                                {turn.response.bill_scan_id &&
-                                  " · used your bill"}
-                              </small>
-                            </div>
-                            <PolicyText text={turn.response.answer} />
-                            <AnswerSteps steps={turn.response.steps} />
-                            {turn.response.cost_estimate && (
-                              <div className="estimate">
-                                <small>ESTIMATED COST TO YOU</small>
-                                <strong>
-                                  {money(
-                                    turn.response.cost_estimate
-                                      .estimated_out_of_pocket,
-                                  )}
-                                </strong>
-                                <p>{turn.response.cost_estimate.explanation}</p>
-                                <small>
-                                  Simplified in-network estimate, not a quote.
-                                </small>
-                                <DemoNote benefits={turn.response.benefits} />
-                              </div>
-                            )}
-                            {turn.response.sources.length > 0 && (
-                              <details>
-                                <summary>
-                                  {turn.response.sources.length} policy{" "}
-                                  {turn.response.sources.length === 1
-                                    ? "source"
-                                    : "sources"}
-                                </summary>
-                                {turn.response.sources.map((source, i) => (
-                                  <blockquote key={i}>
-                                    <strong>{source.document}</strong>
-                                    <p>{source.snippet}</p>
-                                  </blockquote>
-                                ))}
-                              </details>
-                            )}
-                          </div>
-                        )}
-                        {turn.error && (
-                          <p className="error" role="alert">
-                            {turn.error} Your question is back in the composer.
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-            {tab === "scan" && (
-              <div className="page">
-                <div className="page-title">
-                  <span className="eyebrow">BILL & EOB SCANNER</span>
-                  <h1>Let’s check that bill.</h1>
-                  <p>Spot charges worth a closer look.</p>
-                </div>
-                {!hasPlan ? (
-                  choosePlan
-                ) : (
-                  <>
-                    <label
-                      className={`scan-upload ${!available ? "disabled-upload" : ""}`}
-                    >
-                      <input
-                        aria-label="Upload medical bill"
-                        type="file"
-                        accept={UPLOAD_ACCEPT}
-                        disabled={!available}
-                        onChange={(event) => {
-                          const file = event.target.files?.[0];
-                          event.target.value = "";
-                          if (file) void scanBill(file);
-                        }}
-                      />
-                      <span className="scan-symbol">
-                        <Icon name="scan" size={45} />
-                      </span>
-                      <strong>
-                        {pending === "scan"
-                          ? "Reviewing your bill…"
-                          : "Upload your bill"}
-                      </strong>
-                      <span>PDF or photo, including HEIC · up to 15 MB</span>
-                      <span className="upload-pill">
-                        <Icon name="upload" size={16} /> Choose a file
-                      </span>
-                    </label>
-                    {billSamples.map((sample) => (
-                      <button
-                        className="secondary full sample-button"
-                        key={sample.name}
-                        disabled={!available}
-                        onClick={() => void scanBill(undefined, sample)}
-                      >
-                        Try sample: {sample.label}
-                      </button>
-                    ))}
-                    {sampleError && <p className="muted">{sampleError}</p>}
-                    <p className="demo-callout">
-                      <Icon name="info" size={18} />
-                      Bills are reviewed by AI. If AI is unavailable, only the
-                      sample bills can be reviewed, and they're clearly labeled.
-                    </p>
-                    {scanError && (
-                      <p className="error" role="alert">
-                        {scanError}
-                      </p>
-                    )}
-                    {scans.length > 1 && (
-                      <section aria-label="Your saved bills">
-                        <div className="section-heading">
-                          <h2>Your bills</h2>
-                          <span className="mode">{scans.length} saved</span>
-                        </div>
-                        <div className="bill-list">
-                          {scans.map((scan) => (
-                            <button
-                              key={scan.scan_id}
-                              className="bill-row"
-                              aria-pressed={review?.scan_id === scan.scan_id}
-                              disabled={busy}
-                              onClick={() => {
-                                setScanError("");
-                                setReview(scan);
-                              }}
-                            >
-                              <span className="bill-row-icon">
-                                <Icon name="scan" size={18} />
-                              </span>
-                              <span className="bill-row-text">
-                                <strong>
-                                  {scan.provider ?? scan.file_name}
-                                </strong>
-                                <small>
-                                  {shortDate(scan.scanned_at)} · You pay{" "}
-                                  {money(scan.you_owe)}
-                                </small>
-                              </span>
-                              <Icon name="chevron" size={16} />
-                            </button>
-                          ))}
-                        </div>
-                      </section>
-                    )}
-                    {review && (
-                      <div className="scan-results" aria-live="polite">
-                        <div className="section-heading">
-                          <h2>Bill review</h2>
-                          <span className="mode">
-                            {review.demo_mode
-                              ? "Sample result"
-                              : "Gemini result"}
-                          </span>
-                        </div>
-                        {review.demo_mode && (
-                          <p className="notice">
-                            AI is offline, so this is the saved analysis of the
-                            sample bill.
-                          </p>
-                        )}
-                        <section className="price-card">
-                          <span>
-                            YOUR TOTAL PRICE
-                            {review.demo_mode ? " · SAMPLE" : ""}
-                          </span>
-                          <strong>{money(review.you_owe)}</strong>
-                          <p>
-                            Your share under your plan
-                            {review.potential_savings > 0
-                              ? ", once flagged charges are fixed"
-                              : ""}
-                            . The bill asks for {money(review.total_billed)}.
-                          </p>
-                          {benefits && (
-                            <div className="price-deductible">
-                              <div
-                                className="price-meter"
-                                role="progressbar"
-                                aria-label="Deductible met"
-                                aria-valuemin={0}
-                                aria-valuemax={100}
-                                aria-valuenow={deductiblePercent(benefits)}
-                              >
-                                <i
-                                  style={{
-                                    width: `${deductiblePercent(benefits)}%`,
-                                  }}
-                                />
-                              </div>
-                              <small>
-                                {review.applied_to_deductible > 0 && (
-                                  <b className="deductible-bump">
-                                    +{money(review.applied_to_deductible)}
-                                  </b>
-                                )}
-                                Deductible: {money(benefits.deductible_met)} of{" "}
-                                {money(benefits.deductible_total)}
-                                {demoMark(benefits, "deductible_total")} met
-                              </small>
-                            </div>
-                          )}
-                        </section>
-                        <section className="savings-card">
-                          <span>
-                            POTENTIAL SAVINGS
-                            {review.demo_mode ? " · SAMPLE" : ""}
-                          </span>
-                          <strong>{money(review.potential_savings)}</strong>
-                          <p>
-                            Flagged charges to discuss with your provider.
-                            Savings are not guaranteed.
-                          </p>
-                        </section>
-                        {review.rights.length > 0 && (
-                          <section
-                            className="rights-section"
-                            aria-labelledby="rights-heading"
-                          >
-                            <h2 className="section-label" id="rights-heading">
-                              <Icon name="shield" size={18} /> Your rights
-                            </h2>
-                            {review.rights.map((right) => (
-                              <article
-                                className="rights-card"
-                                key={right.rule_id}
-                              >
-                                <h3>{right.title}</h3>
-                                <p>{right.explanation}</p>
-                                {right.lines.length > 0 && (
-                                  <p className="rights-lines">
-                                    Applies to {right.lines.join(", ")}
-                                  </p>
-                                )}
-                                <dl>
-                                  <div>
-                                    <dt>You should owe</dt>
-                                    <dd>{right.you_should_owe}</dd>
-                                  </div>
-                                  <div>
-                                    <dt>What to do</dt>
-                                    <dd>{right.action}</dd>
-                                  </div>
-                                </dl>
-                                <a
-                                  href={right.citation_url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  Source: {right.source_name}
-                                </a>
-                              </article>
-                            ))}
-                            <p className="rights-note">
-                              General information about patient protections, not
-                              legal advice. Your plan or state rules may differ.
-                            </p>
-                          </section>
-                        )}
-                        {(review.potential_savings > 0 ||
-                          review.rights.length > 0) && (
-                          <button
-                            className="primary full fix-bill-button"
-                            disabled={!available}
-                            onClick={() => setDisputeScan(review)}
-                          >
-                            <Icon name="shield" size={17} /> Fix this bill
-                          </button>
-                        )}
-                        <div className="white-card">
-                          <small>{review.provider ?? "Your bill"}</small>
-                          <div className="total-line">
-                            <span>Total billed</span>
-                            <strong>{money(review.total_billed)}</strong>
-                          </div>
-                          <PolicyText text={review.summary} />
-                          <p className="review-context">
-                            {review.file_name} · checked against{" "}
-                            {review.plan_name}
-                          </p>
-                        </div>
-                        {review.overcharge_flags.length > 0 && (
-                          <div className="flag-card">
-                            <strong>Things to review</strong>
-                            {review.overcharge_flags.map((flag, i) => (
-                              <p key={i}>{flag}</p>
-                            ))}
-                          </div>
-                        )}
-                        <h2 className="section-label">Line items</h2>
-                        {review.line_items.map((item, i) => (
-                          <article className="line-item" key={i}>
-                            <div className="line-code">
-                              CPT {item.code}
-                              <span
-                                className={
-                                  item.flag ? "review-badge" : "covered-badge"
-                                }
-                              >
-                                {item.flag
-                                  ? "Review"
-                                  : item.covered
-                                    ? "Covered"
-                                    : "Check"}
-                              </span>
-                            </div>
-                            <h3>{item.description}</h3>
-                            <div className="line-money">
-                              <span>
-                                Billed <b>{money(item.billed)}</b>
-                              </span>
-                              <span>
-                                Expected member cost{" "}
-                                <b>
-                                  {item.plan_expected === null
-                                    ? "Unknown"
-                                    : money(item.plan_expected)}
-                                </b>
-                              </span>
-                            </div>
-                            {item.flag && <p>{item.flag}</p>}
-                          </article>
-                        ))}
-                        <button
-                          className="primary full sample-button"
-                          disabled={!available}
-                          onClick={() => setTab("chat")}
-                        >
-                          <Icon name="chat" size={17} /> Ask about this bill
-                        </button>
-                        <button
-                          className="secondary full sample-button"
-                          disabled={busy}
-                          onClick={() => setSheet("remove")}
-                        >
-                          Remove this bill
-                        </button>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-            {tab === "plan" && (
-              <div className="page">
-                <div className="page-title">
-                  <span className="eyebrow">YOUR BENEFITS</span>
-                  <h1>The bigger picture.</h1>
-                  <p>{plan?.plan_name ?? "No plan chosen yet."}</p>
-                </div>
-                {notice && (
-                  <p className="notice" role="status">
-                    {notice}
-                  </p>
-                )}
-                {!hasPlan ? (
-                  choosePlan
-                ) : (
-                  <>
-                    {coverage}
-                    {benefits && (
-                      <>
-                        <DemoNote benefits={benefits} />
-                        <section className="white-card plan-stats">
-                          <div>
-                            <span>Your coinsurance</span>
-                            <strong>
-                              {(benefits.coinsurance_rate * 100).toLocaleString(
-                                "en-US",
-                                { maximumFractionDigits: 4 },
-                              )}
-                              %{demoMark(benefits, "coinsurance_rate")}
-                            </strong>
-                          </div>
-                          <div>
-                            <span>Plan pays after deductible</span>
-                            <strong>
-                              {(
-                                (1 - benefits.coinsurance_rate) *
-                                100
-                              ).toLocaleString("en-US", {
-                                maximumFractionDigits: 4,
-                              })}
-                              %{demoMark(benefits, "coinsurance_rate")}
-                            </strong>
-                          </div>
-                          <div>
-                            <span>Out-of-pocket maximum</span>
-                            <strong>
-                              {money(benefits.oop_max)}
-                              {demoMark(benefits, "oop_max")}
-                            </strong>
-                          </div>
-                        </section>
-                      </>
-                    )}
-                    {plan && (
-                      <>
-                        <div className="section-heading">
-                          <h2>Active plan</h2>
-                          <span className="mode">
-                            {plan.source === "demo"
-                              ? "Sample plan"
-                              : "Uploaded plan"}
-                          </span>
-                        </div>
-                        <div className="white-card active-plan">
-                          <h3>{plan.plan_name}</h3>
-                          <span className="summary-label">
-                            {aiLabel(plan.demo_mode)}
-                          </span>
-                          <PolicyText text={plan.summary} />
-                        </div>
-                      </>
-                    )}
-                    <button
-                      className="primary full sample-button"
-                      disabled={!canChoosePlan}
-                      onClick={openUpload}
-                    >
-                      <Icon name="upload" size={17} /> Upload or paste a plan
-                    </button>
-                    <div className="plan-controls">
-                      <button
-                        className="secondary"
-                        disabled={busy}
-                        onClick={() => void refresh()}
-                      >
-                        <Icon name="refresh" size={15} /> Refresh
-                      </button>
-                      <button
-                        className="secondary"
-                        disabled={!available}
-                        onClick={() => {
-                          setPlanError("");
-                          setSheet("clear");
-                        }}
-                      >
-                        Start over
-                      </button>
-                    </div>
-                  </>
-                )}
-                <p className="footnote">
-                  {privateData
-                    ? "Your plan, bill scans, and chats are saved privately for this browser."
-                    : "One shared plan for this server. Choosing a plan or starting over changes it for everyone."}{" "}
-                  Uploaded plans start with $0 deductible met. What you owe on
-                  scanned bills counts toward it; remove a bill to take it back
-                  out.
-                </p>
-              </div>
-            )}
-          </main>
-          {tab === "chat" && hasPlan && (
-            <form
-              className="composer"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void ask(question);
-              }}
-            >
-              <div className="message-field">
-                <input
-                  maxLength={4000}
-                  value={question}
-                  onChange={(event) => setQuestion(event.target.value)}
-                  placeholder="Ask about your coverage…"
-                  aria-label="Your benefits question"
-                />
-                <button
-                  disabled={!available || !question.trim()}
-                  aria-label="Send question"
-                >
-                  <Icon name="send" size={20} />
+              )}
+            </header>
+            {connectionError && (
+              <div className="connection-banner" role="alert">
+                <p>{connectionError}</p>
+                <button disabled={busy} onClick={() => void refresh()}>
+                  Retry connection
                 </button>
               </div>
-            </form>
-          )}
-          <nav className="bottom-nav" aria-label="Main navigation">
-            {(["home", "chat", "scan", "plan"] as Tab[]).map((name, index) => (
-              <button
-                key={name}
-                onClick={() => setTab(name)}
-                className={tab === name ? "active" : ""}
-                aria-current={tab === name ? "page" : undefined}
+            )}
+            <main className={`phone-content ${tab}`}>
+              {tab === "home" && (
+                <div className="page">
+                  <div className="welcome">
+                    <span className="eyebrow">LET’S MAKE IT CLEAR</span>
+                    <h1>
+                      Your health.
+                      <br />
+                      Your peace of <em>mind</em>.
+                    </h1>
+                    <p>Understand your plan. Know your costs.</p>
+                  </div>
+                  {notice && (
+                    <p className="notice" role="status">
+                      {notice}
+                    </p>
+                  )}
+                  {hasPlan ? (
+                    <>
+                      {coverage}
+                      {benefits && <DemoNote benefits={benefits} />}
+                      <div className="section-heading">
+                        <h2>How can we help?</h2>
+                      </div>
+                      <div className="action-grid">
+                        <button onClick={() => setTab("chat")}>
+                          <span className="action-icon">
+                            <Icon name="chat" size={25} />
+                          </span>
+                          <strong>Ask ClearClaim</strong>
+                          <span>
+                            Your benefits,
+                            <br />
+                            in plain English
+                          </span>
+                          <Icon name="arrow" size={18} />
+                        </button>
+                        <button onClick={() => setTab("scan")}>
+                          <span className="action-icon pale">
+                            <Icon name="scan" size={25} />
+                          </span>
+                          <strong>Check a bill</strong>
+                          <span>
+                            A second look
+                            <br />
+                            at your charges
+                          </span>
+                          <Icon name="arrow" size={18} />
+                        </button>
+                      </div>
+                      <button
+                        className="question-card"
+                        disabled={!available}
+                        onClick={() => void ask(SUGGESTIONS[2])}
+                      >
+                        <span className="mini-icon">
+                          <Icon name="spark" />
+                        </span>
+                        <span>
+                          <small>A GOOD PLACE TO START</small>
+                          <strong>Is my wellness visit covered?</strong>
+                        </span>
+                        <Icon name="chevron" size={17} />
+                      </button>
+                    </>
+                  ) : (
+                    choosePlan
+                  )}
+                  <p className="footnote">
+                    Financial and administrative guidance only. Estimates are
+                    not guaranteed costs.
+                  </p>
+                </div>
+              )}
+              {tab === "chat" && (
+                <div className="page">
+                  <div className="page-title">
+                    <span className="eyebrow">BENEFITS COPILOT</span>
+                    <h1>
+                      A clearer <em>answer</em>.
+                    </h1>
+                    <p>
+                      {hasPlan
+                        ? `Using ${plan?.plan_name}`
+                        : "Choose a plan to start asking questions."}
+                    </p>
+                    {hasPlan && scans.length > 0 && (
+                      <p className="bill-context">
+                        <Icon name="scan" size={16} />
+                        {scans.length > 1
+                          ? `Also using your ${scans.length} saved bills`
+                          : `Also using your bill from ${scans[0].provider ?? scans[0].file_name}`}
+                      </p>
+                    )}
+                  </div>
+                  {!hasPlan ? (
+                    choosePlan
+                  ) : turns.length === 0 ? (
+                    <>
+                      <div className="chat-orb">
+                        <Icon name="spark" size={32} />
+                      </div>
+                      <h2 className="center">What’s on your mind?</h2>
+                      <p className="center muted">
+                        {review
+                          ? "Ask about your bill or your plan."
+                          : "Include a dollar amount for a cost estimate."}
+                      </p>
+                      <div className="suggestion-list">
+                        {suggestions.map((suggestion, index) => (
+                          <button
+                            key={suggestion}
+                            disabled={!available}
+                            onClick={() => void ask(suggestion)}
+                          >
+                            <Icon
+                              name={
+                                ["wallet", "shield", "spark", "plan"][index]
+                              }
+                              size={19}
+                            />
+                            <span>{suggestion}</span>
+                            <Icon name="plus" size={17} />
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="turns" aria-live="polite">
+                      {turns.map((turn, index) => (
+                        <div key={index}>
+                          <div className="user-bubble">{turn.question}</div>
+                          {turn.response && (
+                            <div className="answer">
+                              <div className="answer-label">
+                                <span className="answer-avatar">
+                                  <Icon name="spark" size={14} />
+                                </span>
+                                ClearClaim{" "}
+                                <small>
+                                  {aiLabel(turn.response.demo_mode)}
+                                  {turn.response.bill_scan_id &&
+                                    " · used your bill"}
+                                </small>
+                              </div>
+                              <PolicyText text={turn.response.answer} />
+                              <AnswerSteps steps={turn.response.steps} />
+                              {turn.response.cost_estimate && (
+                                <div className="estimate">
+                                  <small>ESTIMATED COST TO YOU</small>
+                                  <strong>
+                                    {money(
+                                      turn.response.cost_estimate
+                                        .estimated_out_of_pocket,
+                                    )}
+                                  </strong>
+                                  <p>
+                                    {turn.response.cost_estimate.explanation}
+                                  </p>
+                                  <small>
+                                    Simplified in-network estimate, not a quote.
+                                  </small>
+                                  <DemoNote benefits={turn.response.benefits} />
+                                </div>
+                              )}
+                              {turn.response.sources.length > 0 && (
+                                <details>
+                                  <summary>
+                                    {turn.response.sources.length} policy{" "}
+                                    {turn.response.sources.length === 1
+                                      ? "source"
+                                      : "sources"}
+                                  </summary>
+                                  {turn.response.sources.map((source, i) => (
+                                    <blockquote key={i}>
+                                      <strong>{source.document}</strong>
+                                      <p>{source.snippet}</p>
+                                    </blockquote>
+                                  ))}
+                                </details>
+                              )}
+                            </div>
+                          )}
+                          {turn.error && (
+                            <p className="error" role="alert">
+                              {turn.error} Your question is back in the
+                              composer.
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                      {/* The header's status line announces this for screen readers. */}
+                      {pending === "chat" && (
+                        <div className="thinking" aria-hidden="true">
+                          <span className="answer-avatar">
+                            <Icon name="spark" size={14} />
+                          </span>
+                          <span className="thinking-text">
+                            Checking your plan…
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              {tab === "scan" && (
+                <div className="page">
+                  <div className="page-title">
+                    <span className="eyebrow">BILL & EOB SCANNER</span>
+                    <h1>
+                      Let’s check that <em>bill</em>.
+                    </h1>
+                    <p>Spot charges worth a closer look.</p>
+                  </div>
+                  {!hasPlan ? (
+                    choosePlan
+                  ) : (
+                    <>
+                      <label
+                        className={`scan-upload ${!available ? "disabled-upload" : ""} ${pending === "scan" ? "scanning" : ""}`}
+                      >
+                        <input
+                          aria-label="Upload medical bill"
+                          type="file"
+                          accept={UPLOAD_ACCEPT}
+                          disabled={!available}
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            event.target.value = "";
+                            if (file) void scanBill(file);
+                          }}
+                        />
+                        <span className="scan-symbol">
+                          <Icon name="scan" size={45} />
+                        </span>
+                        <strong>
+                          {pending === "scan"
+                            ? "Reviewing your bill…"
+                            : "Upload your bill"}
+                        </strong>
+                        <span>PDF or photo, including HEIC · up to 15 MB</span>
+                        <span className="upload-pill">
+                          <Icon name="upload" size={16} /> Choose a file
+                        </span>
+                      </label>
+                      {billSamples.map((sample) => (
+                        <button
+                          className="secondary full sample-button"
+                          key={sample.name}
+                          disabled={!available}
+                          onClick={() => void scanBill(undefined, sample)}
+                        >
+                          Try sample: {sample.label}
+                        </button>
+                      ))}
+                      {sampleError && <p className="muted">{sampleError}</p>}
+                      <p className="demo-callout">
+                        <Icon name="info" size={18} />
+                        Bills are reviewed by AI. If AI is unavailable, only the
+                        sample bills can be reviewed, and they're clearly
+                        labeled.
+                      </p>
+                      {scanError && (
+                        <p className="error" role="alert">
+                          {scanError}
+                        </p>
+                      )}
+                      {scans.length > 1 && (
+                        <section aria-label="Your saved bills">
+                          <div className="section-heading">
+                            <h2>Your bills</h2>
+                            <span className="mode">{scans.length} saved</span>
+                          </div>
+                          <div className="bill-list">
+                            {scans.map((scan) => (
+                              <button
+                                key={scan.scan_id}
+                                className="bill-row"
+                                aria-pressed={review?.scan_id === scan.scan_id}
+                                disabled={busy}
+                                onClick={() => {
+                                  setScanError("");
+                                  setReview(scan);
+                                }}
+                              >
+                                <span className="bill-row-icon">
+                                  <Icon name="scan" size={18} />
+                                </span>
+                                <span className="bill-row-text">
+                                  <strong>
+                                    {scan.provider ?? scan.file_name}
+                                  </strong>
+                                  <small>
+                                    {shortDate(scan.scanned_at)} · You pay{" "}
+                                    {money(scan.you_owe)}
+                                  </small>
+                                </span>
+                                <Icon name="chevron" size={16} />
+                              </button>
+                            ))}
+                          </div>
+                        </section>
+                      )}
+                      {review && (
+                        <div className="scan-results" aria-live="polite">
+                          <div className="section-heading">
+                            <h2>Bill review</h2>
+                            <span className="mode">
+                              {review.demo_mode
+                                ? "Sample result"
+                                : "Gemini result"}
+                            </span>
+                          </div>
+                          {review.demo_mode && (
+                            <p className="notice">
+                              AI is offline, so this is the saved analysis of
+                              the sample bill.
+                            </p>
+                          )}
+                          <section className="price-card">
+                            <span>
+                              YOUR TOTAL PRICE
+                              {review.demo_mode ? " · SAMPLE" : ""}
+                            </span>
+                            <strong>{money(review.you_owe)}</strong>
+                            <p>
+                              Your share under your plan
+                              {review.potential_savings > 0
+                                ? ", once flagged charges are fixed"
+                                : ""}
+                              . The bill asks for {money(review.total_billed)}.
+                            </p>
+                            {benefits && (
+                              <div className="price-deductible">
+                                <div
+                                  className="price-meter"
+                                  role="progressbar"
+                                  aria-label="Deductible met"
+                                  aria-valuemin={0}
+                                  aria-valuemax={100}
+                                  aria-valuenow={deductiblePercent(benefits)}
+                                >
+                                  <i
+                                    style={{
+                                      width: `${deductiblePercent(benefits)}%`,
+                                    }}
+                                  />
+                                </div>
+                                <small>
+                                  {review.applied_to_deductible > 0 && (
+                                    <b className="deductible-bump">
+                                      +{money(review.applied_to_deductible)}
+                                    </b>
+                                  )}
+                                  Deductible: {money(benefits.deductible_met)}{" "}
+                                  of {money(benefits.deductible_total)}
+                                  {demoMark(benefits, "deductible_total")} met
+                                </small>
+                              </div>
+                            )}
+                          </section>
+                          <section className="savings-card">
+                            <span>
+                              POTENTIAL SAVINGS
+                              {review.demo_mode ? " · SAMPLE" : ""}
+                            </span>
+                            <strong>{money(review.potential_savings)}</strong>
+                            <p>
+                              Flagged charges to discuss with your provider.
+                              Savings are not guaranteed.
+                            </p>
+                          </section>
+                          {review.rights.length > 0 && (
+                            <section
+                              className="rights-section"
+                              aria-labelledby="rights-heading"
+                            >
+                              <h2 className="section-label" id="rights-heading">
+                                <Icon name="shield" size={18} /> Your rights
+                              </h2>
+                              {review.rights.map((right) => (
+                                <article
+                                  className="rights-card"
+                                  key={right.rule_id}
+                                >
+                                  <h3>{right.title}</h3>
+                                  <p>{right.explanation}</p>
+                                  {right.lines.length > 0 && (
+                                    <p className="rights-lines">
+                                      Applies to {right.lines.join(", ")}
+                                    </p>
+                                  )}
+                                  <dl>
+                                    <div>
+                                      <dt>You should owe</dt>
+                                      <dd>{right.you_should_owe}</dd>
+                                    </div>
+                                    <div>
+                                      <dt>What to do</dt>
+                                      <dd>{right.action}</dd>
+                                    </div>
+                                  </dl>
+                                  <a
+                                    href={right.citation_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    Source: {right.source_name}
+                                  </a>
+                                </article>
+                              ))}
+                              <p className="rights-note">
+                                General information about patient protections,
+                                not legal advice. Your plan or state rules may
+                                differ.
+                              </p>
+                            </section>
+                          )}
+                          {(review.potential_savings > 0 ||
+                            review.rights.length > 0) && (
+                            <button
+                              className="primary full fix-bill-button"
+                              disabled={!available}
+                              onClick={() => setDisputeScan(review)}
+                            >
+                              <Icon name="shield" size={17} /> Fix this bill
+                            </button>
+                          )}
+                          <div className="white-card">
+                            <small>{review.provider ?? "Your bill"}</small>
+                            <div className="total-line">
+                              <span>Total billed</span>
+                              <strong>{money(review.total_billed)}</strong>
+                            </div>
+                            <PolicyText text={review.summary} />
+                            <p className="review-context">
+                              {review.file_name} · checked against{" "}
+                              {review.plan_name}
+                            </p>
+                          </div>
+                          {review.overcharge_flags.length > 0 && (
+                            <div className="flag-card">
+                              <strong>Things to review</strong>
+                              {review.overcharge_flags.map((flag, i) => (
+                                <p key={i}>{flag}</p>
+                              ))}
+                            </div>
+                          )}
+                          <h2 className="section-label">Line items</h2>
+                          {review.line_items.map((item, i) => (
+                            <article className="line-item" key={i}>
+                              <div className="line-code">
+                                CPT {item.code}
+                                <span
+                                  className={
+                                    item.flag ? "review-badge" : "covered-badge"
+                                  }
+                                >
+                                  {item.flag
+                                    ? "Review"
+                                    : item.covered
+                                      ? "Covered"
+                                      : "Check"}
+                                </span>
+                              </div>
+                              <h3>{item.description}</h3>
+                              <div className="line-money">
+                                <span>
+                                  Billed <b>{money(item.billed)}</b>
+                                </span>
+                                <span>
+                                  Expected member cost{" "}
+                                  <b>
+                                    {item.plan_expected === null
+                                      ? "Unknown"
+                                      : money(item.plan_expected)}
+                                  </b>
+                                </span>
+                              </div>
+                              {item.flag && <p>{item.flag}</p>}
+                            </article>
+                          ))}
+                          <button
+                            className="primary full sample-button"
+                            disabled={!available}
+                            onClick={() => setTab("chat")}
+                          >
+                            <Icon name="chat" size={17} /> Ask about this bill
+                          </button>
+                          <button
+                            className="secondary full sample-button"
+                            disabled={busy}
+                            onClick={() => setSheet("remove")}
+                          >
+                            Remove this bill
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+              {tab === "plan" && (
+                <div className="page">
+                  <div className="page-title">
+                    <span className="eyebrow">YOUR BENEFITS</span>
+                    <h1>
+                      The bigger <em>picture</em>.
+                    </h1>
+                    <p>{plan?.plan_name ?? "No plan chosen yet."}</p>
+                  </div>
+                  {notice && (
+                    <p className="notice" role="status">
+                      {notice}
+                    </p>
+                  )}
+                  {!hasPlan ? (
+                    choosePlan
+                  ) : (
+                    <>
+                      {coverage}
+                      {benefits && (
+                        <>
+                          <DemoNote benefits={benefits} />
+                          <section className="plan-stats">
+                            <div>
+                              <span>Your coinsurance</span>
+                              <strong>
+                                {(
+                                  benefits.coinsurance_rate * 100
+                                ).toLocaleString("en-US", {
+                                  maximumFractionDigits: 4,
+                                })}
+                                %{demoMark(benefits, "coinsurance_rate")}
+                              </strong>
+                            </div>
+                            <div>
+                              <span>Plan pays after deductible</span>
+                              <strong>
+                                {(
+                                  (1 - benefits.coinsurance_rate) *
+                                  100
+                                ).toLocaleString("en-US", {
+                                  maximumFractionDigits: 4,
+                                })}
+                                %{demoMark(benefits, "coinsurance_rate")}
+                              </strong>
+                            </div>
+                            <div>
+                              <span>Out-of-pocket maximum</span>
+                              <strong>
+                                {money(benefits.oop_max)}
+                                {demoMark(benefits, "oop_max")}
+                              </strong>
+                            </div>
+                          </section>
+                        </>
+                      )}
+                      {plan && (
+                        <>
+                          <div className="section-heading">
+                            <h2>Active plan</h2>
+                            <span className="mode">
+                              {plan.source === "demo"
+                                ? "Sample plan"
+                                : "Uploaded plan"}
+                            </span>
+                          </div>
+                          <div className="white-card active-plan">
+                            <h3>{plan.plan_name}</h3>
+                            <span className="summary-label">
+                              {aiLabel(plan.demo_mode)}
+                            </span>
+                            <PolicyText text={plan.summary} />
+                          </div>
+                        </>
+                      )}
+                      <button
+                        className="primary full sample-button"
+                        disabled={!canChoosePlan}
+                        onClick={openUpload}
+                      >
+                        <Icon name="upload" size={17} /> Upload or paste a plan
+                      </button>
+                      <div className="plan-controls">
+                        <button
+                          className="secondary"
+                          disabled={busy}
+                          onClick={() => void refresh()}
+                        >
+                          <Icon name="refresh" size={15} /> Refresh
+                        </button>
+                        <button
+                          className="secondary"
+                          disabled={!available}
+                          onClick={() => {
+                            setPlanError("");
+                            setSheet("clear");
+                          }}
+                        >
+                          Start over
+                        </button>
+                      </div>
+                    </>
+                  )}
+                  <p className="footnote">
+                    {privateData
+                      ? "Your plan, bill scans, and chats are saved privately for this browser."
+                      : "One shared plan for this server. Choosing a plan or starting over changes it for everyone."}{" "}
+                    Uploaded plans start with $0 deductible met. What you owe on
+                    scanned bills counts toward it; remove a bill to take it
+                    back out.
+                  </p>
+                </div>
+              )}
+            </main>
+          </div>
+          <div className="dock">
+            {tab === "chat" && hasPlan && (
+              <form
+                className="composer"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void ask(question);
+                }}
               >
-                <Icon name={name} />
-                <span>{["Home", "Ask", "Scan", "My plan"][index]}</span>
-              </button>
-            ))}
-          </nav>
-          <div className="home-indicator" />
+                <div className="message-field">
+                  <input
+                    maxLength={4000}
+                    value={question}
+                    onChange={(event) => setQuestion(event.target.value)}
+                    placeholder="Ask about your coverage…"
+                    aria-label="Your benefits question"
+                  />
+                  <button
+                    disabled={!available || !question.trim()}
+                    aria-label="Send question"
+                  >
+                    <Icon name="send" size={20} />
+                  </button>
+                </div>
+              </form>
+            )}
+            <nav
+              className="bottom-nav"
+              aria-label="Main navigation"
+              style={{ "--tab": TABS.indexOf(tab) } as CSSProperties}
+            >
+              <span className="nav-pill" aria-hidden="true" />
+              {TABS.map((name, index) => (
+                <button
+                  key={name}
+                  onClick={() => setTab(name)}
+                  className={tab === name ? "active" : ""}
+                  aria-current={tab === name ? "page" : undefined}
+                >
+                  <Icon name={name} />
+                  <span>{TAB_LABELS[index]}</span>
+                </button>
+              ))}
+            </nav>
+            <div className="home-indicator" />
+          </div>
           {splash && (
             <div className="splash">
               <div className="splash-center">
-                <img
-                  src="./app-icon.png"
-                  alt="ClearClaim red bandage app icon"
-                />
+                <AppMark alt="ClearClaim red bandage app icon" />
                 <h1>ClearClaim</h1>
                 <p>A little clarity goes a long way.</p>
                 <div className="splash-loader">
