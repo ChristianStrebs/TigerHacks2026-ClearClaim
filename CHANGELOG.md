@@ -32,6 +32,14 @@ Because backend and mobile work live in different folders, these merges should n
 - README "Getting started" is written for someone running the repo for the first time:
   clone steps, separate macOS/Linux and Windows commands, what works without a Gemini
   key, and troubleshooting. Python 3.12+ is now listed because the pinned NumPy needs it.
+- **Web app design refresh.** Same brand, screens, and copy, with a modern finish:
+  Instrument Serif headlines with Geist for the interface, color tokens with automatic
+  dark mode, a floating tab bar with a sliding indicator, and bottom-sheet dialogs on
+  phones. Text colors now meet WCAG AA contrast. On a real phone the mock iPhone status
+  bar and home indicator are hidden, safe areas are respected, and text fields use 16px
+  type so iOS Safari doesn't zoom in. Chat shows a typing indicator and the bill scanner
+  a scan animation while Gemini works. The desktop showcase lists the TigerHacks 2026
+  awards. No API changes.
 
 ---
 

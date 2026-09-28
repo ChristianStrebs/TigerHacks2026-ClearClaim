@@ -16,6 +16,8 @@ const paths: Record<string, string> = {
   refresh: "M20 7a9 9 0 1 0 1 8M20 3v5h-5",
   wallet: "M3 7V5a2 2 0 0 1 2-2h13v4M3 7h18v14H3zM16 12h5v5h-5z",
   info: "M12 11v6M12 7h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",
+  trophy:
+    "M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM17 5h3v1a4 4 0 0 1-3 4M7 5H4v1a4 4 0 0 0 3 4",
 };
 export function Icon({ name, size = 22 }: { name: string; size?: number }) {
   return (
