@@ -1,6 +1,8 @@
 # ClearClaim — Healthcare Benefits Copilot
 
 > TigerHacks 2026 · Financial Freedom in Healthcare track · MLH "Best Use of Gemini API"
+> https://devpost.com/software/clearclaim-sfq9v6
+> https://youtu.be/JueXd2_x3pU
 
 ClearClaim is an AI-powered **healthcare benefits copilot**. It turns dense,
 jargon-filled insurance policies into plain-English answers, flags likely
